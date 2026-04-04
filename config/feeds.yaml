@@ -9,9 +9,6 @@ feeds:
   - url: https://buildersbox.corp-sansan.com/feed
     name: Sansan Builders Box
 
-  - url: https://hrmos.co/blog/rss.xml
-    name: HRMOS Blog
-
   - url: https://blog.recruit.co.jp/rtc/feed/
     name: Recruit Tech Blog
 
@@ -27,34 +24,25 @@ feeds:
   - url: https://moneyforward-dev.jp/feed
     name: Money Forward Developers Blog
 
-  # Wantedly ML Round Table: GitHub Issues を Atom フィードとして購読
-  - url: https://github.com/wantedly/machine-learning-round-table/issues.atom
+  - url: https://engineer.wantedly.com/feed
+    name: Wantedly Engineer Blog
+
+  - url: https://github.com/wantedly/machine-learning-round-table
     name: Wantedly ML Round Table (GitHub Issues)
+    type: github_issues
 
   # ---- グローバル ----
   - url: https://engineering.linkedin.com/blog.rss
     name: LinkedIn Engineering Blog
 
-  - url: https://medium.com/feed/workday-technology
-    name: Workday Technology (Medium)
-
   - url: https://engineering.atspotify.com/feed/
     name: Spotify Engineering
-
-  - url: https://greenhouse.io/blog/feed
-    name: Greenhouse Blog
 
   - url: https://www.lever.co/blog/feed/
     name: Lever Blog
 
   - url: https://lattice.com/blog/rss.xml
     name: Lattice Blog
-
-  - url: https://cultureamp.com/blog/feed.xml
-    name: Culture Amp Blog
-
-  - url: https://rippling.com/blog/rss.xml
-    name: Rippling Blog
 
   # ---- 推薦・検索・ML（グローバル大手）----
   - url: https://research.google/blog/rss/
@@ -85,8 +73,5 @@ feeds:
     name: Hugging Face Blog
 
   # ---- HR tech ニュース（技術寄り）----
-  - url: https://hrtechnologist.com/feed/
-    name: HR Technologist
-
   - url: https://www.hrtechoutlook.com/rss-feeds/
     name: HR Tech Outlook

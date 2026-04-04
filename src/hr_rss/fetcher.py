@@ -1,6 +1,7 @@
+import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import feedparser
 import httpx
@@ -8,6 +9,11 @@ from loguru import logger
 
 _DEFAULT_TIMEOUT = 10.0
 _HEADERS = {"User-Agent": "hr-rss-bot/1.0 (tech article aggregator)"}
+_GITHUB_API_HEADERS = {
+    **_HEADERS,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
 
 
 @dataclass
@@ -21,10 +27,14 @@ class Article:
     labels: list[str] = field(default_factory=list)
 
 
-def fetch_feed(url: str, days: int, source: str = "", timeout: float = _DEFAULT_TIMEOUT) -> list[Article]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+def fetch_feed(
+    url: str, days: int, source: str = "", timeout: float = _DEFAULT_TIMEOUT
+) -> list[Article]:
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     try:
-        response = httpx.get(url, timeout=timeout, headers=_HEADERS, follow_redirects=True)
+        response = httpx.get(
+            url, timeout=timeout, headers=_HEADERS, follow_redirects=True
+        )
         response.raise_for_status()
         feed = feedparser.parse(response.text)
     except Exception as e:
@@ -48,11 +58,74 @@ def fetch_feed(url: str, days: int, source: str = "", timeout: float = _DEFAULT_
     return articles
 
 
+def fetch_github_issues(
+    url: str, days: int, source: str = "", timeout: float = _DEFAULT_TIMEOUT
+) -> list[Article]:
+    """GitHub リポジトリの Issues を Article リストとして返す。
+
+    url には GitHub リポジトリの URL（例: https://github.com/owner/repo）を渡す。
+    REST API 経由で取得するため、.atom フィードが無効なリポジトリでも動作する。
+    """
+    m = re.search(r"github\.com/([^/]+/[^/]+?)(?:\.git)?$", url.rstrip("/"))
+    if not m:
+        logger.warning(f"Invalid GitHub repo URL: {url}")
+        return []
+
+    repo_path = m.group(1)
+    api_url = f"https://api.github.com/repos/{repo_path}/issues"
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+
+    articles: list[Article] = []
+    page = 1
+    while True:
+        try:
+            response = httpx.get(
+                api_url,
+                timeout=timeout,
+                headers=_GITHUB_API_HEADERS,
+                params={"state": "open", "per_page": 100, "page": page},
+            )
+            response.raise_for_status()
+            issues = response.json()
+        except Exception as e:
+            logger.warning(f"Failed to fetch GitHub issues {url}: {e}")
+            break
+
+        if not issues:
+            break
+
+        for issue in issues:
+            created_at = issue.get("created_at", "")
+            try:
+                published = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                continue
+            if published < cutoff:
+                # Issues は新しい順なのでここで打ち切れる
+                return articles
+
+            articles.append(
+                Article(
+                    title=issue.get("title", ""),
+                    url=issue.get("html_url", ""),
+                    excerpt=issue.get("body", "") or "",
+                    published=published,
+                    source=source,
+                )
+            )
+
+        if len(issues) < 100:
+            break
+        page += 1
+
+    return articles
+
+
 def _parse_published(entry: dict) -> datetime | None:
     t = entry.get("published_parsed")
     if t is None:
         return None
     try:
-        return datetime.fromtimestamp(time.mktime(t), tz=timezone.utc)
+        return datetime.fromtimestamp(time.mktime(t), tz=UTC)
     except (ValueError, OverflowError, OSError):
         return None

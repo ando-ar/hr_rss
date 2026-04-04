@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from hr_rss.config import Config
-from hr_rss.fetcher import Article, fetch_feed
+from hr_rss.fetcher import Article, fetch_feed, fetch_github_issues
 from hr_rss.filter import is_excluded
 from hr_rss.llm import classify_article, summarize_and_label
 from hr_rss.renderer import render_html, render_markdown
@@ -36,7 +36,11 @@ def main(days: int, output: str | None) -> None:
         url = feed["url"]
         name = feed.get("name", url)
         logger.info(f"Fetching: {name}")
-        articles = fetch_feed(url, days=days, source=name)
+        feed_type = feed.get("type", "rss")
+        if feed_type == "github_issues":
+            articles = fetch_github_issues(url, days=days, source=name)
+        else:
+            articles = fetch_feed(url, days=days, source=name)
         all_articles.extend(articles)
 
     logger.info(f"Fetched {len(all_articles)} articles total")
