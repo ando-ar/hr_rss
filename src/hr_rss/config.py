@@ -30,7 +30,7 @@ class Config:
             raise FileNotFoundError(f"feeds file not found: {resolved_feeds_path}")
         with resolved_feeds_path.open() as f:
             data = yaml.safe_load(f)
-        self.feeds: list[dict] = data.get("feeds", [])
+        self.feeds: list[dict] = (data or {}).get("feeds") or []
 
         exclude_path = self._dir / "exclude_keywords.yaml"
         if not exclude_path.exists():

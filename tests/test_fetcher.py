@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from hr_rss.fetcher import Article, fetch_feed
@@ -23,7 +23,7 @@ def _mock_http(entries: list[dict], mock_get: MagicMock, mock_parse: MagicMock) 
 
 
 def test_fetch_feed_returns_articles_within_days():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     entries = [_make_entry("新しい記事", "https://example.com/new", now)]
     with (
         patch("hr_rss.fetcher.httpx.get") as mock_get,
@@ -38,7 +38,7 @@ def test_fetch_feed_returns_articles_within_days():
 
 
 def test_fetch_feed_excludes_articles_older_than_days():
-    old = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    old = datetime(2000, 1, 1, tzinfo=UTC)
     entries = [_make_entry("古い記事", "https://example.com/old", old)]
     with (
         patch("hr_rss.fetcher.httpx.get") as mock_get,
@@ -51,8 +51,10 @@ def test_fetch_feed_excludes_articles_older_than_days():
 
 
 def test_fetch_feed_returns_article_with_summary():
-    now = datetime.now(timezone.utc)
-    entries = [_make_entry("記事", "https://example.com/a", now, summary="概要テキスト")]
+    now = datetime.now(UTC)
+    entries = [
+        _make_entry("記事", "https://example.com/a", now, summary="概要テキスト")
+    ]
     with (
         patch("hr_rss.fetcher.httpx.get") as mock_get,
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
@@ -91,7 +93,7 @@ def test_fetch_feed_returns_empty_on_http_error():
 
 def test_fetch_feed_uses_custom_timeout():
     """タイムアウト引数がhttpxに渡されること"""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     entries = [_make_entry("記事", "https://example.com/a", now)]
     with (
         patch("hr_rss.fetcher.httpx.get") as mock_get,
@@ -118,7 +120,7 @@ def test_article_dataclass_fields():
         title="タイトル",
         url="https://example.com",
         excerpt="概要",
-        published=datetime.now(timezone.utc),
+        published=datetime.now(UTC),
         source="Example Blog",
     )
     assert article.title == "タイトル"
@@ -130,7 +132,7 @@ def test_article_has_labels_field_defaulting_to_empty_list():
         title="タイトル",
         url="https://example.com",
         excerpt="概要",
-        published=datetime.now(timezone.utc),
+        published=datetime.now(UTC),
         source="Example Blog",
     )
     assert article.labels == []
@@ -141,8 +143,52 @@ def test_article_labels_can_be_set():
         title="タイトル",
         url="https://example.com",
         excerpt="概要",
-        published=datetime.now(timezone.utc),
+        published=datetime.now(UTC),
         source="Example Blog",
         labels=["生成AI", "推薦システム"],
     )
     assert article.labels == ["生成AI", "推薦システム"]
+
+
+def test_fetch_feed_entry_missing_title_uses_empty_string():
+    """エントリに title キーがない場合、空文字列で記事が生成されること"""
+    now = datetime.now(UTC)
+    entry = {"link": "https://example.com/a", "published_parsed": now.timetuple()}
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http([entry], mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+    assert len(result) == 1
+    assert result[0].title == ""
+
+
+def test_fetch_feed_entry_missing_link_uses_empty_string():
+    """エントリに link キーがない場合、空文字列で記事が生成されること"""
+    now = datetime.now(UTC)
+    entry = {"title": "タイトル", "published_parsed": now.timetuple()}
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http([entry], mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+    assert len(result) == 1
+    assert result[0].url == ""
+
+
+def test_fetch_feed_published_parsed_is_none_skips_entry():
+    """published_parsed が None のエントリはスキップされること"""
+    entry = {
+        "title": "タイトル",
+        "link": "https://example.com/a",
+        "published_parsed": None,
+    }
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http([entry], mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+    assert result == []

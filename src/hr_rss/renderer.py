@@ -1,3 +1,4 @@
+import hashlib
 import html as _html
 from datetime import UTC, datetime
 
@@ -17,11 +18,21 @@ _LABEL_COLORS: dict[str, tuple[str, str]] = {
     "論文紹介": ("#ede7f6", "#311b92"),
     "アーキテクチャ": ("#e0f2f1", "#004d40"),
 }
-_DEFAULT_LABEL_COLORS = ("#eeeeee", "#333333")
+
+
+def _label_colors(label: str) -> tuple[str, str]:
+    """ラベル名から背景色・文字色を返す。未知ラベルはハッシュで色を自動生成する。"""
+    if label in _LABEL_COLORS:
+        return _LABEL_COLORS[label]
+    digest = hashlib.md5(label.encode(), usedforsecurity=False).digest()
+    hue = int.from_bytes(digest[:2], "big") % 360
+    bg = f"hsl({hue},60%,92%)"
+    fg = f"hsl({hue},55%,28%)"
+    return bg, fg
 
 
 def _chip_html(label: str) -> str:
-    bg, fg = _LABEL_COLORS.get(label, _DEFAULT_LABEL_COLORS)
+    bg, fg = _label_colors(label)
     style = (
         f"background:{bg};color:{fg};"
         "padding:3px 11px;border-radius:999px;font-size:0.76rem;"
@@ -180,11 +191,13 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
     })();
     """
 
-    # フィルターボタン：実際に登場するラベルのみ、_LABEL_COLORSの順序を維持
-    all_labels_in_order = list(_LABEL_COLORS.keys())
-    present_labels = [
-        lb for lb in all_labels_in_order if any(lb in a.labels for a in articles)
-    ]
+    # フィルターボタン：実際に登場するラベルのみ
+    # 既知ラベルは_LABEL_COLORSの定義順、未知ラベルはその後ろにアルファベット順で追加
+    known_order = list(_LABEL_COLORS.keys())
+    all_present: set[str] = {lb for a in articles for lb in a.labels}
+    known_present = [lb for lb in known_order if lb in all_present]
+    unknown_present = sorted(all_present - set(known_order))
+    present_labels = known_present + unknown_present
 
     filter_btns = ['<button class="filter-btn" data-label="all">すべて</button>']
     for lb in present_labels:

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from hr_rss.fetcher import Article
-from hr_rss.renderer import render_html, render_markdown
+from hr_rss.renderer import _label_colors, render_html, render_markdown
 
 
 def _make_article(
@@ -159,3 +159,43 @@ def test_render_html_multiple_labels_on_one_card():
     result = render_html([article], summaries={}, days=7)
     assert "機械学習" in result
     assert "MLOps" in result
+
+
+# --- _label_colors tests ---
+
+
+def test_label_colors_known_label_returns_exact_color():
+    bg, fg = _label_colors("生成AI")
+    assert bg == "#fce4ec"
+    assert fg == "#880e4f"
+
+
+def test_label_colors_unknown_label_returns_hsl():
+    bg, fg = _label_colors("未来技術")
+    assert bg.startswith("hsl(")
+    assert fg.startswith("hsl(")
+
+
+def test_label_colors_unknown_label_hue_in_range():
+    bg, _ = _label_colors("未来技術")
+    # hsl(NNN,60%,92%) から hue を取り出す
+    hue = int(bg.split("(")[1].split(",")[0])
+    assert 0 <= hue < 360
+
+
+def test_label_colors_same_unknown_label_is_deterministic():
+    assert _label_colors("新しいラベル") == _label_colors("新しいラベル")
+
+
+def test_render_html_unknown_label_appears_in_filter_bar():
+    article = _make_article("タイトル", "https://example.com/a")
+    article.labels = ["未知のラベル"]
+    result = render_html([article], summaries={}, days=7)
+    assert "未知のラベル" in result
+
+
+def test_render_html_unknown_label_chip_has_hsl_color():
+    article = _make_article("タイトル", "https://example.com/a")
+    article.labels = ["未知のラベル"]
+    result = render_html([article], summaries={}, days=7)
+    assert "hsl(" in result

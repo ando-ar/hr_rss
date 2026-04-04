@@ -59,3 +59,13 @@ def test_scrape_text_returns_empty_string_on_non_200():
         text = scrape_text("https://example.com/article")
 
     assert text == ""
+
+
+def test_scrape_text_html_without_article_main_body_returns_empty():
+    """article / main / body タグが一切ない HTML を渡したとき空文字列を返すこと"""
+    bare_html = "<html><head><title>test</title></head></html>"
+    with patch("hr_rss.scraper.httpx.get") as mock_get:
+        mock_get.return_value = _mock_response(bare_html)
+        text = scrape_text("https://example.com/article")
+
+    assert text == ""
