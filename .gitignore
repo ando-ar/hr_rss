@@ -27,3 +27,6 @@ htmlcov/
 
 # VSCode
 .vscode/
+
+# 生成物
+output/
