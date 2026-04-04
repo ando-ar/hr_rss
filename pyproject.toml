@@ -1,0 +1,49 @@
+[project]
+name = "project"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.13"
+dependencies = [
+    "loguru>=0.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.0",
+    "ruff>=0.9",
+    "ty>=0.0.1a0",
+    "ipykernel>=6.0",
+    "pre-commit>=4.0",
+    "pip-audit>=2.7",
+    "python-dotenv>=1.0",
+    "detect-secrets>=1.5.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.10,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]  # pytest では assert が標準
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--cov=src", "--cov-report=term-missing", "--cov-report=html:htmlcov"]
+
+[tool.coverage.run]
+omit = ["tests/*", "src/*/__main__.py"]
+
+[tool.hypothesis]
+# プロファイルは tests/conftest.py で切り替える
+# uv run pytest --hypothesis-profile=ci  など
+deriving_stategies_from_ast = true

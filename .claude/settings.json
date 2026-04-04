@@ -1,0 +1,79 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv *)",
+      "Bash(git *)",
+      "Bash(ruff *)",
+      "Bash(pytest *)",
+      "Bash(jq *)",
+      "Bash(dvc *)",
+      "Bash(mlflow *)",
+      "Bash(chmod *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(rm *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(apt-get *)",
+      "Bash(npm *)",
+      "Bash(node *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(tar *)",
+      "Bash(unzip *)",
+      "Bash(make *)",
+      "Bash(pre-commit *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.keys)",
+      "Read(.env.local)",
+      "Read(.env.*.local)",
+      "Read(.env.development)",
+      "Read(.env.development.*)",
+      "Read(.env.production)",
+      "Read(.env.production.*)",
+      "Read(.env.staging)",
+      "Read(.env.staging.*)",
+      "Read(./secrets/**)",
+      "Bash(rm -rf /)",
+      "Bash(git push --force *)",
+      "Bash(.venv/*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "denyRead": [
+        "~/.aws/credentials",
+        "~/.aws/config",
+        "~/.ssh/**",
+        "~/.config/gh/hosts.yml"
+      ]
+    },
+    "network": {}
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; [[ \"$f\" == *.py ]] || exit 0; uv run ruff format . && uv run ruff check --fix . && uv run ty check; } 2>/dev/null || true",
+            "statusMessage": "ruff format / ruff check / ty check 実行中..."
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "uv run python .claude/statusline.py"
+  }
+}

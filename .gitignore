@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 認証情報・証明書
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.yaml
+service_account*.json
+.env
+
+# テストカバレッジ
+htmlcov/
+.coverage
+
+# OS
+.DS_Store
+
+# VSCode
+.vscode/
