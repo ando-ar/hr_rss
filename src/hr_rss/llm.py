@@ -1,70 +1,52 @@
 import json
 import os
+from pathlib import Path
 
 import anthropic
+import yaml
 from dotenv import load_dotenv
 from loguru import logger
 
+from hr_rss.config import _find_config_dir
+
 load_dotenv()
 
-_MODEL = "claude-haiku-4-5-20251001"
+_MODEL = os.environ.get("ANTHROPIC_API_MODEL", "claude-haiku-4-5-20251001")
 _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
-_LABELS: list[str] = [
-    "生成AI",
-    "機械学習",
-    "データサイエンス",
-    "自然言語処理",
-    "推薦システム",
-    "検索",
-    "MLOps",
-    "データエンジニアリング",
-    "インフラ",
-    "バックエンド",
-    "論文紹介",
-    "アーキテクチャ",
-]
 
-_CLASSIFY_SYSTEM = """\
-あなたはHR tech業界の技術記事フィルタリングの専門家です。
-与えられた記事のタイトルと概要を読み、その記事が「技術者が読む価値のある技術記事」かどうかを判断してください。
+def _load_labels(config_dir: Path) -> list[str]:
+    path = config_dir / "labels.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"labels file not found: {path}")
+    with path.open() as f:
+        data = yaml.safe_load(f)
+    return data.get("labels", [])
 
-【通過させるもの】
-- 新サービスや新機能の技術的な解説
-- AI・機械学習・LLMを活用したHR系プロダクトの紹介
-- システムアーキテクチャや実装に関する記事
-- HR techの技術的なコンセプト・設計思想の記事
 
-【除外するもの】
-- 資金調達・IPO・上場
-- 企業間の提携・買収・合併
-- 勉強会・イベント・セミナーの告知
-- 採用・求人情報
-- 受賞・表彰のプレスリリース
+def _load_prompts(config_dir: Path) -> dict[str, str]:
+    path = config_dir / "prompts.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"prompts file not found: {path}")
+    with path.open() as f:
+        return yaml.safe_load(f)
 
-「YES」または「NO」のみで答えてください。
-"""
 
-_SUMMARIZE_AND_LABEL_SYSTEM = f"""\
-あなたはHR tech業界のエンジニア向けに技術記事を要約・分類するアシスタントです。
-記事の内容を読み、以下のJSON形式で回答してください。
+def _build_systems(config_dir: Path | None = None) -> tuple[str, str, list[str]]:
+    d = config_dir if config_dir is not None else _find_config_dir()
+    labels = _load_labels(d)
+    prompts = _load_prompts(d)
 
-{{
-  "summary": "3〜5文の日本語要約",
-  "labels": ["ラベル1", "ラベル2"]
-}}
+    classify_system = prompts["classify_system"].strip()
+    summarize_template = prompts["summarize_system"].strip()
+    summarize_system = summarize_template.replace(
+        "{labels_json}", json.dumps(labels, ensure_ascii=False)
+    )
+    return classify_system, summarize_system, labels
 
-【要約のポイント】
-- 何の技術を使っているか
-- どんな課題を解決しているか
-- どんな新規性・工夫があるか
 
-【ラベルの選択ルール】
-以下のリストから該当するものを1〜3個選んでください。リスト外の値は使用禁止です。
-{json.dumps(_LABELS, ensure_ascii=False)}
-
-JSONのみを出力し、コードブロックや前置きは不要です。
-"""
+# モジュールロード時に一度だけ設定を読み込む
+_CLASSIFY_SYSTEM, _SUMMARIZE_AND_LABEL_SYSTEM, _LABELS = _build_systems()
 
 
 def classify_article(title: str, excerpt: str) -> bool:
@@ -86,7 +68,6 @@ def _strip_code_block(text: str) -> str:
     """```json ... ``` や ``` ... ``` で囲まれたコードブロックを除去する"""
     if text.startswith("```"):
         lines = text.splitlines()
-        # 最初の行（```json など）と最後の行（```）を除去
         inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
         return "\n".join(inner).strip()
     return text

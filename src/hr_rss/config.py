@@ -2,55 +2,36 @@ from pathlib import Path
 
 import yaml
 
-_DEFAULT_FEEDS_PATH = Path(__file__).parent / "feeds.yaml"
+def _find_config_dir() -> Path:
+    """プロジェクトルートの config/ ディレクトリを返す。
 
-_EXCLUDE_KEYWORDS: list[str] = [
-    # 日本語
-    "資金調達",
-    "シリーズ",
-    "提携",
-    "業務提携",
-    "資本提携",
-    "合併",
-    "買収",
-    "勉強会",
-    "イベント",
-    "セミナー",
-    "カンファレンス",
-    "登壇",
-    "採用",
-    "求人",
-    "インターン",
-    "表彰",
-    "受賞",
-    "上場",
-    "IPO",
-    # English
-    "funding",
-    "series a",
-    "series b",
-    "series c",
-    "raises",
-    "raised",
-    "partnership",
-    "partners with",
-    "acquisition",
-    "acquires",
-    "merger",
-    "meetup",
-    "webinar",
-    "hiring",
-    "job opening",
-    "we're hiring",
-]
+    実行時の CWD から pyproject.toml を探して上位に辿り、
+    見つかればその隣の config/ を返す。見つからなければ CWD/config/ を返す。
+    """
+    for parent in [Path.cwd(), *Path.cwd().parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent / "config"
+    return Path.cwd() / "config"
 
 
 class Config:
-    def __init__(self, feeds_path: Path | None = None) -> None:
-        path = feeds_path if feeds_path is not None else _DEFAULT_FEEDS_PATH
-        if not path.exists():
-            raise FileNotFoundError(f"feeds file not found: {path}")
-        with path.open() as f:
+    def __init__(self, config_dir: Path | None = None) -> None:
+        self._dir = config_dir if config_dir is not None else _find_config_dir()
+
+        feeds_path = self._dir / "feeds.yaml"
+        if not feeds_path.exists():
+            raise FileNotFoundError(f"feeds file not found: {feeds_path}")
+        with feeds_path.open() as f:
             data = yaml.safe_load(f)
         self.feeds: list[dict] = data.get("feeds", [])
-        self.exclude_keywords: list[str] = _EXCLUDE_KEYWORDS
+
+        exclude_path = self._dir / "exclude_keywords.yaml"
+        if not exclude_path.exists():
+            raise FileNotFoundError(f"exclude_keywords file not found: {exclude_path}")
+        with exclude_path.open() as f:
+            kw_data = yaml.safe_load(f)
+        self.exclude_keywords: list[str] = kw_data.get("exclude_keywords", [])
+
+    @property
+    def config_dir(self) -> Path:
+        return self._dir
