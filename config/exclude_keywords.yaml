@@ -1,0 +1,38 @@
+exclude_keywords:
+  # 日本語
+  - 資金調達
+  - シリーズ
+  - 提携
+  - 業務提携
+  - 資本提携
+  - 合併
+  - 買収
+  - 勉強会
+  - イベント
+  - セミナー
+  - カンファレンス
+  - 登壇
+  - 採用
+  - 求人
+  - インターン
+  - 表彰
+  - 受賞
+  - 上場
+  - IPO
+  # English
+  - funding
+  - series a
+  - series b
+  - series c
+  - raises
+  - raised
+  - partnership
+  - partners with
+  - acquisition
+  - acquires
+  - merger
+  - meetup
+  - webinar
+  - hiring
+  - job opening
+  - "we're hiring"
