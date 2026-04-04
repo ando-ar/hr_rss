@@ -1,0 +1,148 @@
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
+
+from hr_rss.fetcher import Article, fetch_feed
+
+
+def _make_entry(title: str, link: str, published: datetime, summary: str = "") -> dict:
+    return {
+        "title": title,
+        "link": link,
+        "published_parsed": published.timetuple(),
+        "summary": summary,
+    }
+
+
+def _mock_http(entries: list[dict], mock_get: MagicMock, mock_parse: MagicMock) -> None:
+    """httpx.get と feedparser.parse を一括モック"""
+    resp = MagicMock()
+    resp.text = "<rss/>"
+    resp.raise_for_status = lambda: None
+    mock_get.return_value = resp
+    mock_parse.return_value = {"entries": entries, "bozo": False}
+
+
+def test_fetch_feed_returns_articles_within_days():
+    now = datetime.now(timezone.utc)
+    entries = [_make_entry("新しい記事", "https://example.com/new", now)]
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http(entries, mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+
+    assert len(result) == 1
+    assert result[0].title == "新しい記事"
+    assert result[0].url == "https://example.com/new"
+
+
+def test_fetch_feed_excludes_articles_older_than_days():
+    old = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    entries = [_make_entry("古い記事", "https://example.com/old", old)]
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http(entries, mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+
+    assert result == []
+
+
+def test_fetch_feed_returns_article_with_summary():
+    now = datetime.now(timezone.utc)
+    entries = [_make_entry("記事", "https://example.com/a", now, summary="概要テキスト")]
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http(entries, mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+
+    assert result[0].excerpt == "概要テキスト"
+
+
+def test_fetch_feed_skips_article_with_invalid_date():
+    """year 0 など time.mktime が ValueError を出す日付の記事はスキップされること"""
+    invalid_entry = {
+        "title": "不正な日付の記事",
+        "link": "https://example.com/bad-date",
+        "published_parsed": (0, 1, 1, 0, 0, 0, 0, 1, 0),  # year 0
+        "summary": "",
+    }
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http([invalid_entry], mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", days=7)
+
+    assert result == []
+
+
+def test_fetch_feed_returns_empty_on_http_error():
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        mock_get.side_effect = Exception("network error")
+        result = fetch_feed("https://example.com/feed", days=7)
+
+    assert result == []
+
+
+def test_fetch_feed_uses_custom_timeout():
+    """タイムアウト引数がhttpxに渡されること"""
+    now = datetime.now(timezone.utc)
+    entries = [_make_entry("記事", "https://example.com/a", now)]
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http(entries, mock_get, mock_parse)
+        fetch_feed("https://example.com/feed", days=7, timeout=10)
+
+    _, kwargs = mock_get.call_args
+    assert kwargs.get("timeout") == 10
+
+
+def test_fetch_feed_skips_on_http_timeout():
+    """タイムアウト例外が発生したフィードは空リストを返すこと"""
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        mock_get.side_effect = Exception("timed out")
+        result = fetch_feed("https://example.com/feed", days=7, timeout=10)
+
+    assert result == []
+
+
+def test_article_dataclass_fields():
+    article = Article(
+        title="タイトル",
+        url="https://example.com",
+        excerpt="概要",
+        published=datetime.now(timezone.utc),
+        source="Example Blog",
+    )
+    assert article.title == "タイトル"
+    assert article.source == "Example Blog"
+
+
+def test_article_has_labels_field_defaulting_to_empty_list():
+    article = Article(
+        title="タイトル",
+        url="https://example.com",
+        excerpt="概要",
+        published=datetime.now(timezone.utc),
+        source="Example Blog",
+    )
+    assert article.labels == []
+
+
+def test_article_labels_can_be_set():
+    article = Article(
+        title="タイトル",
+        url="https://example.com",
+        excerpt="概要",
+        published=datetime.now(timezone.utc),
+        source="Example Blog",
+        labels=["生成AI", "推薦システム"],
+    )
+    assert article.labels == ["生成AI", "推薦システム"]
