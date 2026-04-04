@@ -1,9 +1,11 @@
 import json
 import os
 from pathlib import Path
+from typing import cast
 
 import anthropic
 import yaml
+from anthropic.types import TextBlock
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -55,9 +57,11 @@ def classify_article(title: str, excerpt: str) -> bool:
             model=_MODEL,
             max_tokens=10,
             system=_CLASSIFY_SYSTEM,
-            messages=[{"role": "user", "content": f"タイトル: {title}\n概要: {excerpt}"}],
+            messages=[
+                {"role": "user", "content": f"タイトル: {title}\n概要: {excerpt}"}
+            ],
         )
-        answer = response.content[0].text.strip().upper()
+        answer = cast(TextBlock, response.content[0]).text.strip().upper()
         return answer.startswith("YES")
     except Exception as e:
         logger.warning(f"classify_article failed: {e}")
@@ -87,7 +91,7 @@ def summarize_and_label(title: str, full_text: str, url: str) -> tuple[str, list
                 }
             ],
         )
-        raw = _strip_code_block(response.content[0].text.strip())
+        raw = _strip_code_block(cast(TextBlock, response.content[0]).text.strip())
         data = json.loads(raw)
         summary = data.get("summary", "")
         labels = [lb for lb in data.get("labels", []) if lb in _LABELS]

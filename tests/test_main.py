@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -13,7 +12,7 @@ def _make_article(title: str = "AI記事", url: str = "https://example.com") -> 
         title=title,
         url=url,
         excerpt="概要",
-        published=datetime.now(timezone.utc),
+        published=datetime.now(UTC),
         source="Test Blog",
     )
 
@@ -50,6 +49,25 @@ def test_main_writes_output_to_output_dir(tmp_path):
         runner.invoke(main, ["--days", "7"])
 
     assert any(tmp_path.iterdir())
+
+
+def test_main_writes_both_md_and_html(tmp_path):
+    with (
+        patch("hr_rss.__main__.fetch_feed", return_value=[]),
+        patch("hr_rss.__main__.Config") as mock_config_cls,
+        patch("hr_rss.__main__.OUTPUT_DIR", tmp_path),
+    ):
+        mock_config = MagicMock()
+        mock_config.feeds = []
+        mock_config.exclude_keywords = []
+        mock_config_cls.return_value = mock_config
+
+        runner = CliRunner()
+        runner.invoke(main, ["--days", "7"])
+
+    suffixes = {p.suffix for p in tmp_path.iterdir()}
+    assert ".md" in suffixes
+    assert ".html" in suffixes
 
 
 def test_main_explicit_output_path(tmp_path):
@@ -90,7 +108,6 @@ def test_main_labels_are_set_on_articles(tmp_path):
         result = runner.invoke(main, ["--days", "7"])
 
     assert result.exit_code == 0
-    output_files = list(tmp_path.iterdir())
-    assert len(output_files) == 1
-    content = output_files[0].read_text()
-    assert "生成AI" in content
+    output_files = {p.suffix: p for p in tmp_path.iterdir()}
+    assert ".md" in output_files
+    assert "生成AI" in output_files[".md"].read_text()

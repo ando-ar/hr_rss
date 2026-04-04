@@ -2,6 +2,7 @@ from pathlib import Path
 
 import yaml
 
+
 def _find_config_dir() -> Path:
     """プロジェクトルートの config/ ディレクトリを返す。
 
@@ -15,13 +16,19 @@ def _find_config_dir() -> Path:
 
 
 class Config:
-    def __init__(self, config_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        config_dir: Path | None = None,
+        feeds_path: Path | None = None,
+    ) -> None:
         self._dir = config_dir if config_dir is not None else _find_config_dir()
 
-        feeds_path = self._dir / "feeds.yaml"
-        if not feeds_path.exists():
-            raise FileNotFoundError(f"feeds file not found: {feeds_path}")
-        with feeds_path.open() as f:
+        resolved_feeds_path = (
+            feeds_path if feeds_path is not None else self._dir / "feeds.yaml"
+        )
+        if not resolved_feeds_path.exists():
+            raise FileNotFoundError(f"feeds file not found: {resolved_feeds_path}")
+        with resolved_feeds_path.open() as f:
             data = yaml.safe_load(f)
         self.feeds: list[dict] = data.get("feeds", [])
 

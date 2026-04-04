@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -9,7 +9,7 @@ from hr_rss.config import Config
 from hr_rss.fetcher import Article, fetch_feed
 from hr_rss.filter import is_excluded
 from hr_rss.llm import classify_article, summarize_and_label
-from hr_rss.renderer import render_markdown
+from hr_rss.renderer import render_html, render_markdown
 from hr_rss.scraper import scrape_text
 
 load_dotenv()
@@ -18,7 +18,9 @@ OUTPUT_DIR = Path("output")
 
 
 @click.command()
-@click.option("--days", default=7, show_default=True, help="何日前までの記事を対象にするか")
+@click.option(
+    "--days", default=7, show_default=True, help="何日前までの記事を対象にするか"
+)
 @click.option(
     "--output",
     default=None,
@@ -40,7 +42,9 @@ def main(days: int, output: str | None) -> None:
     logger.info(f"Fetched {len(all_articles)} articles total")
 
     # 2. キーワードフィルタ
-    after_keyword = [a for a in all_articles if not is_excluded(a.title, config.exclude_keywords)]
+    after_keyword = [
+        a for a in all_articles if not is_excluded(a.title, config.exclude_keywords)
+    ]
     logger.info(f"{len(after_keyword)} articles after keyword filter")
 
     # 3. LLM Step1: 技術記事か判定
@@ -68,15 +72,23 @@ def main(days: int, output: str | None) -> None:
         article.labels = labels
         logger.info(f"Labels: {labels}")
 
-    # 5. Markdown出力
+    # 5. 出力 (Markdown + HTML)
     md = render_markdown(tech_articles, summaries=summaries, days=days)
+    html_content = render_html(tech_articles, summaries=summaries, days=days)
+
+    date_str = datetime.now(UTC).strftime("%Y%m%d")
     if output:
-        output_path = Path(output)
+        md_path = Path(output)
+        html_path = md_path.with_suffix(".html")
     else:
         OUTPUT_DIR.mkdir(exist_ok=True)
-        output_path = OUTPUT_DIR / f"output_{datetime.now(timezone.utc).strftime('%Y%m%d')}.md"
-    output_path.write_text(md, encoding="utf-8")
-    logger.success(f"Written to {output_path} ({len(tech_articles)} articles)")
+        md_path = OUTPUT_DIR / f"output_{date_str}.md"
+        html_path = OUTPUT_DIR / f"output_{date_str}.html"
+
+    md_path.write_text(md, encoding="utf-8")
+    html_path.write_text(html_content, encoding="utf-8")
+    logger.success(f"Written to {md_path} ({len(tech_articles)} articles)")
+    logger.success(f"Written to {html_path}")
 
 
 if __name__ == "__main__":
