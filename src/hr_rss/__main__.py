@@ -8,7 +8,7 @@ from loguru import logger
 from hr_rss.config import Config
 from hr_rss.fetcher import Article, fetch_feed, fetch_github_issues
 from hr_rss.filter import is_excluded
-from hr_rss.llm import classify_article, summarize_and_label
+from hr_rss.llm import classify_article, get_stats, reset_stats, summarize_and_label
 from hr_rss.renderer import render_html, render_markdown
 from hr_rss.scraper import scrape_text
 
@@ -29,6 +29,12 @@ OUTPUT_DIR = Path("output")
 def main(days: int, output: str | None) -> None:
     """HR tech技術記事をRSSから収集し、Markdownにまとめる。"""
     config = Config()
+    reset_stats()
+
+    fetchers = {
+        "rss": fetch_feed,
+        "github_issues": fetch_github_issues,
+    }
 
     # 1. 全フィードから記事を収集
     all_articles: list[Article] = []
@@ -37,10 +43,8 @@ def main(days: int, output: str | None) -> None:
         name = feed.get("name", url)
         logger.info(f"Fetching: {name}")
         feed_type = feed.get("type", "rss")
-        if feed_type == "github_issues":
-            articles = fetch_github_issues(url, days=days, source=name)
-        else:
-            articles = fetch_feed(url, days=days, source=name)
+        fetcher_fn = fetchers.get(feed_type, fetch_feed)
+        articles = fetcher_fn(url, days=days, source=name)
         all_articles.extend(articles)
 
     logger.info(f"Fetched {len(all_articles)} articles total")
@@ -93,6 +97,46 @@ def main(days: int, output: str | None) -> None:
     html_path.write_text(html_content, encoding="utf-8")
     logger.success(f"Written to {md_path} ({len(tech_articles)} articles)")
     logger.success(f"Written to {html_path}")
+
+    _print_summary(
+        n_feeds=len(config.feeds),
+        n_fetched=len(all_articles),
+        n_after_filter=len(after_keyword),
+        n_classified=len(tech_articles),
+    )
+
+
+def _print_summary(
+    n_feeds: int,
+    n_fetched: int,
+    n_after_filter: int,
+    n_classified: int,
+) -> None:
+    stats = get_stats()
+    total_in = stats["classify_in"] + stats["summarize_in"]
+    total_out = stats["classify_out"] + stats["summarize_out"]
+
+    w = 50
+    click.echo("")
+    click.echo("━" * w)
+    click.echo(" 実行サマリー")
+    click.echo("─" * w)
+    click.echo(f"  フィード取得:         {n_feeds} ソース → {n_fetched} 件")
+    click.echo(f"  キーワードフィルタ後: {n_after_filter} 件")
+    click.echo(
+        f"  LLM 分類 (Step 1):   {n_classified} / {n_after_filter} 件通過"
+        f"  [{stats['classify_calls']} calls |"
+        f" {stats['classify_in']:,} in / {stats['classify_out']:,} out tok]"
+    )
+    click.echo(
+        f"  LLM 要約 (Step 2):   {n_classified} 件"
+        f"  [{stats['summarize_calls']} calls |"
+        f" {stats['summarize_in']:,} in / {stats['summarize_out']:,} out tok]"
+    )
+    click.echo("─" * w)
+    click.echo(f"  合計トークン:         {total_in:,} in / {total_out:,} out")
+    click.echo("━" * w)
+    click.echo("")
 
 
 if __name__ == "__main__":

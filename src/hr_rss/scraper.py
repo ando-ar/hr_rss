@@ -2,14 +2,17 @@ import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
 
+from hr_rss._constants import HTTP_HEADERS
+
 _TIMEOUT = 15.0
-_HEADERS = {"User-Agent": "hr-rss-bot/1.0 (tech article aggregator)"}
 _NOISE_TAGS = ["nav", "footer", "header", "aside", "script", "style", "noscript"]
 
 
 def scrape_text(url: str) -> str:
     try:
-        response = httpx.get(url, timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True)
+        response = httpx.get(
+            url, timeout=_TIMEOUT, headers=HTTP_HEADERS, follow_redirects=True
+        )
         response.raise_for_status()
     except Exception as e:
         logger.warning(f"Failed to scrape {url}: {e}")

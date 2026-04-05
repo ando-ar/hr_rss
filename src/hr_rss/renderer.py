@@ -1,5 +1,6 @@
 import hashlib
 import html as _html
+import json
 from datetime import UTC, datetime
 
 from hr_rss.fetcher import Article
@@ -181,7 +182,7 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
             if(label === 'all'){
               card.style.display = '';
             } else {
-              var labels = card.dataset.labels ? card.dataset.labels.split('\\t') : [];
+              var labels = card.dataset.labels ? JSON.parse(card.dataset.labels) : [];
               card.style.display = labels.indexOf(label) >= 0 ? '' : 'none';
             }
           });
@@ -213,7 +214,7 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
     else:
         card_parts: list[str] = []
         for article in articles:
-            data_labels = "\t".join(article.labels)
+            data_labels_json = json.dumps(article.labels, ensure_ascii=False)
             chips = "".join(_chip_html(lb) for lb in article.labels)
             chips_div = f'<div class="card-chips">{chips}</div>' if chips else ""
             summary = summaries.get(article.url, "")
@@ -226,7 +227,7 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
             title_esc = _html.escape(article.title)
             src_esc = _html.escape(article.source)
             pub_date = article.published.strftime("%Y-%m-%d")
-            dl_esc = _html.escape(data_labels)
+            dl_esc = _html.escape(data_labels_json)
             card_parts.append(
                 f'    <article class="card" data-labels="{dl_esc}">\n'
                 f'      <div class="card-title">'

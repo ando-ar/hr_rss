@@ -7,13 +7,18 @@ import feedparser
 import httpx
 from loguru import logger
 
+from hr_rss._constants import HTTP_HEADERS
+
 _DEFAULT_TIMEOUT = 10.0
-_HEADERS = {"User-Agent": "hr-rss-bot/1.0 (tech article aggregator)"}
 _GITHUB_API_HEADERS = {
-    **_HEADERS,
+    **HTTP_HEADERS,
     "Accept": "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
 }
+
+
+def _make_cutoff(days: int) -> datetime:
+    return datetime.now(UTC) - timedelta(days=days)
 
 
 @dataclass
@@ -30,10 +35,10 @@ class Article:
 def fetch_feed(
     url: str, days: int, source: str = "", timeout: float = _DEFAULT_TIMEOUT
 ) -> list[Article]:
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    cutoff = _make_cutoff(days)
     try:
         response = httpx.get(
-            url, timeout=timeout, headers=_HEADERS, follow_redirects=True
+            url, timeout=timeout, headers=HTTP_HEADERS, follow_redirects=True
         )
         response.raise_for_status()
         feed = feedparser.parse(response.text)
@@ -73,7 +78,7 @@ def fetch_github_issues(
 
     repo_path = m.group(1)
     api_url = f"https://api.github.com/repos/{repo_path}/issues"
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    cutoff = _make_cutoff(days)
 
     articles: list[Article] = []
     page = 1

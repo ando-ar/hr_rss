@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-from hr_rss.fetcher import Article, fetch_feed
+from hr_rss.fetcher import Article, fetch_feed, fetch_github_issues
 
 
 def _make_entry(title: str, link: str, published: datetime, summary: str = "") -> dict:
@@ -192,3 +192,95 @@ def test_fetch_feed_published_parsed_is_none_skips_entry():
         _mock_http([entry], mock_get, mock_parse)
         result = fetch_feed("https://example.com/feed", days=7)
     assert result == []
+
+
+# --- fetch_github_issues ---
+
+
+def _mock_github_http(issues: list[dict], mock_get: MagicMock) -> None:
+    resp = MagicMock()
+    resp.json.return_value = issues
+    resp.raise_for_status = lambda: None
+    mock_get.return_value = resp
+
+
+def _make_issue(
+    title: str,
+    url: str,
+    created_at: datetime,
+    body: str = "",
+) -> dict:
+    return {
+        "title": title,
+        "html_url": url,
+        "body": body,
+        "created_at": created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+
+def test_fetch_github_issues_returns_recent_articles():
+    now = datetime.now(UTC)
+    issues = [_make_issue("Issue 1", "https://github.com/org/repo/issues/1", now)]
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        _mock_github_http(issues, mock_get)
+        result = fetch_github_issues("https://github.com/org/repo", days=7)
+    assert len(result) == 1
+    assert result[0].title == "Issue 1"
+    assert result[0].url == "https://github.com/org/repo/issues/1"
+
+
+def test_fetch_github_issues_excludes_old_issues():
+    old = datetime(2000, 1, 1, tzinfo=UTC)
+    issues = [_make_issue("Old Issue", "https://github.com/org/repo/issues/1", old)]
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        _mock_github_http(issues, mock_get)
+        result = fetch_github_issues("https://github.com/org/repo", days=7)
+    assert result == []
+
+
+def test_fetch_github_issues_invalid_url_returns_empty():
+    result = fetch_github_issues("https://notgithub.com/foo/bar", days=7)
+    assert result == []
+
+
+def test_fetch_github_issues_returns_empty_on_http_error():
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        mock_get.side_effect = Exception("API error")
+        result = fetch_github_issues("https://github.com/org/repo", days=7)
+    assert result == []
+
+
+def test_fetch_github_issues_stops_when_page_empty():
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        _mock_github_http([], mock_get)
+        result = fetch_github_issues("https://github.com/org/repo", days=7)
+    assert result == []
+    assert mock_get.call_count == 1
+
+
+def test_fetch_github_issues_uses_body_as_excerpt():
+    now = datetime.now(UTC)
+    url = "https://github.com/org/repo/issues/1"
+    issues = [_make_issue("Issue", url, now, body="本文内容")]
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        _mock_github_http(issues, mock_get)
+        result = fetch_github_issues("https://github.com/org/repo", days=7)
+    assert result[0].excerpt == "本文内容"
+
+
+def test_fetch_github_issues_skips_invalid_created_at():
+    now = datetime.now(UTC)
+    issues = [
+        {
+            "title": "Bad date",
+            "html_url": "https://github.com/org/repo/issues/1",
+            "body": "",
+            "created_at": "not-a-date",
+        },
+        _make_issue("Good Issue", "https://github.com/org/repo/issues/2", now),
+    ]
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        _mock_github_http(issues, mock_get)
+        result = fetch_github_issues("https://github.com/org/repo", days=7)
+    assert len(result) == 1
+    assert result[0].title == "Good Issue"

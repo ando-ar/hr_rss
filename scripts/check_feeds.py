@@ -20,8 +20,9 @@ import click
 import feedparser
 import httpx
 
+from hr_rss._constants import HTTP_HEADERS
 from hr_rss.config import Config
-from hr_rss.fetcher import _GITHUB_API_HEADERS, _HEADERS
+from hr_rss.fetcher import _GITHUB_API_HEADERS
 
 
 @dataclass
@@ -42,7 +43,7 @@ def _check_rss_feed(name: str, url: str, timeout: float) -> FeedCheckResult:
         response = httpx.get(
             url,
             timeout=httpx.Timeout(timeout, connect=5.0),
-            headers=_HEADERS,
+            headers=HTTP_HEADERS,
             follow_redirects=True,
         )
         response.raise_for_status()

@@ -14,7 +14,28 @@ from hr_rss.config import _find_config_dir
 load_dotenv()
 
 _MODEL = os.environ.get("ANTHROPIC_API_MODEL", "claude-haiku-4-5-20251001")
+_MAX_CHARS = int(os.environ.get("LLM_MAX_CHARS", "8000"))
 _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+_run_stats: dict[str, int] = {
+    "classify_calls": 0,
+    "classify_in": 0,
+    "classify_out": 0,
+    "summarize_calls": 0,
+    "summarize_in": 0,
+    "summarize_out": 0,
+}
+
+
+def reset_stats() -> None:
+    """実行開始時に呼び出してトークン集計をリセットする。"""
+    for k in _run_stats:
+        _run_stats[k] = 0
+
+
+def get_stats() -> dict[str, int]:
+    """現在の集計値のコピーを返す。"""
+    return dict(_run_stats)
 
 
 def _load_labels(config_dir: Path) -> list[str]:
@@ -47,20 +68,31 @@ def _build_systems(config_dir: Path | None = None) -> tuple[str, str, list[str]]
     return classify_system, summarize_system, labels
 
 
-# モジュールロード時に一度だけ設定を読み込む
-_CLASSIFY_SYSTEM, _SUMMARIZE_AND_LABEL_SYSTEM, _LABELS = _build_systems()
+# 遅延初期化：最初の呼び出し時にのみ設定ファイルを読み込む
+_systems: tuple[str, str, list[str]] | None = None
+
+
+def _get_systems() -> tuple[str, str, list[str]]:
+    global _systems
+    if _systems is None:
+        _systems = _build_systems()
+    return _systems
 
 
 def classify_article(title: str, excerpt: str) -> bool:
+    classify_system, _, _ = _get_systems()
     try:
         response = _client.messages.create(
             model=_MODEL,
             max_tokens=10,
-            system=_CLASSIFY_SYSTEM,
+            system=classify_system,
             messages=[
                 {"role": "user", "content": f"タイトル: {title}\n概要: {excerpt}"}
             ],
         )
+        _run_stats["classify_calls"] += 1
+        _run_stats["classify_in"] += response.usage.input_tokens
+        _run_stats["classify_out"] += response.usage.output_tokens
         answer = cast(TextBlock, response.content[0]).text.strip().upper()
         return answer.startswith("YES")
     except Exception as e:
@@ -78,12 +110,13 @@ def _strip_code_block(text: str) -> str:
 
 
 def summarize_and_label(title: str, full_text: str, url: str) -> tuple[str, list[str]]:
-    truncated = full_text[:8000] if len(full_text) > 8000 else full_text
+    _, summarize_system, labels_vocab = _get_systems()
+    truncated = full_text[:_MAX_CHARS] if len(full_text) > _MAX_CHARS else full_text
     try:
         response = _client.messages.create(
             model=_MODEL,
             max_tokens=600,
-            system=_SUMMARIZE_AND_LABEL_SYSTEM,
+            system=summarize_system,
             messages=[
                 {
                     "role": "user",
@@ -91,10 +124,13 @@ def summarize_and_label(title: str, full_text: str, url: str) -> tuple[str, list
                 }
             ],
         )
+        _run_stats["summarize_calls"] += 1
+        _run_stats["summarize_in"] += response.usage.input_tokens
+        _run_stats["summarize_out"] += response.usage.output_tokens
         raw = _strip_code_block(cast(TextBlock, response.content[0]).text.strip())
         data = json.loads(raw)
         summary = data.get("summary", "")
-        labels = [lb for lb in data.get("labels", []) if lb in _LABELS]
+        labels = [lb for lb in data.get("labels", []) if lb in labels_vocab]
         return summary, labels
     except Exception as e:
         logger.warning(f"summarize_and_label failed for {url}: {e}")
