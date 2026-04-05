@@ -15,6 +15,22 @@ def _find_config_dir() -> Path:
     return Path.cwd() / "config"
 
 
+def _resolve_config_file(dir: Path, name: str) -> Path:
+    """ユーザー独自ファイル → サンプルファイルの順で解決する。
+
+    ``dir / name`` が存在すればそれを返す。なければ
+    ``dir / <stem>.sample.yaml`` を試みる。どちらも存在しない場合は
+    FileNotFoundError を送出する。
+    """
+    plain = dir / name
+    if plain.exists():
+        return plain
+    sample = dir / name.replace(".yaml", ".sample.yaml")
+    if sample.exists():
+        return sample
+    raise FileNotFoundError(f"config file not found: {plain} (also tried {sample})")
+
+
 class Config:
     def __init__(
         self,
@@ -24,17 +40,15 @@ class Config:
         self._dir = config_dir if config_dir is not None else _find_config_dir()
 
         resolved_feeds_path = (
-            feeds_path if feeds_path is not None else self._dir / "feeds.yaml"
+            feeds_path
+            if feeds_path is not None
+            else _resolve_config_file(self._dir, "feeds.yaml")
         )
-        if not resolved_feeds_path.exists():
-            raise FileNotFoundError(f"feeds file not found: {resolved_feeds_path}")
         with resolved_feeds_path.open() as f:
             data = yaml.safe_load(f)
         self.feeds: list[dict] = (data or {}).get("feeds") or []
 
-        exclude_path = self._dir / "exclude_keywords.yaml"
-        if not exclude_path.exists():
-            raise FileNotFoundError(f"exclude_keywords file not found: {exclude_path}")
+        exclude_path = _resolve_config_file(self._dir, "exclude_keywords.yaml")
         with exclude_path.open() as f:
             kw_data = yaml.safe_load(f)
         self.exclude_keywords: list[str] = kw_data.get("exclude_keywords", [])

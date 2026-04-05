@@ -9,7 +9,7 @@ from anthropic.types import TextBlock
 from dotenv import load_dotenv
 from loguru import logger
 
-from hr_rss.config import _find_config_dir
+from hr_rss.config import _find_config_dir, _resolve_config_file
 
 load_dotenv()
 
@@ -39,18 +39,14 @@ def get_stats() -> dict[str, int]:
 
 
 def _load_labels(config_dir: Path) -> list[str]:
-    path = config_dir / "labels.yaml"
-    if not path.exists():
-        raise FileNotFoundError(f"labels file not found: {path}")
+    path = _resolve_config_file(config_dir, "labels.yaml")
     with path.open() as f:
         data = yaml.safe_load(f)
     return data.get("labels", [])
 
 
 def _load_prompts(config_dir: Path) -> dict[str, str]:
-    path = config_dir / "prompts.yaml"
-    if not path.exists():
-        raise FileNotFoundError(f"prompts file not found: {path}")
+    path = _resolve_config_file(config_dir, "prompts.yaml")
     with path.open() as f:
         return yaml.safe_load(f)
 

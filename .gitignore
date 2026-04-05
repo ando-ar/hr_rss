@@ -21,6 +21,7 @@ service_account*.json
 # テストカバレッジ
 htmlcov/
 .coverage
+pytest-of-*/
 
 # OS
 .DS_Store
@@ -30,3 +31,9 @@ htmlcov/
 
 # 生成物
 output/
+
+# ユーザーローカルの config オーバーライド（*.sample.yaml をコピーして編集すること）
+config/feeds.yaml
+config/labels.yaml
+config/exclude_keywords.yaml
+config/prompts.yaml
