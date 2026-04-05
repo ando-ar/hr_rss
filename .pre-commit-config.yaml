@@ -31,6 +31,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: update-sample-html
+        name: renderer 変更時にサンプル HTML を再生成
+        entry: uv run python scripts/update_sample.py
+        language: system
+        files: ^src/hr_rss/renderer\.py$
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: pip-audit
         name: pip-audit
         entry: uv run pip-audit
