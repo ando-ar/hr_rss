@@ -1,5 +1,5 @@
 feeds:
-  # ---- 国内 HRテック企業（競合プロダクト動向）----
+  # ---- 国内 HRテック企業 ----
   - url: https://tech.smarthr.jp/feed
     name: SmartHR Tech Blog
 
@@ -27,26 +27,13 @@ feeds:
   - url: https://engineer.wantedly.com/feed
     name: Wantedly Engineer Blog
 
-  # ---- グローバル HRテック企業（競合プロダクト）----
-  - url: https://engineering.linkedin.com/blog.rss
-    name: LinkedIn Engineering Blog
+  # ---- 国内 HR業界メディア ----
+  - url: https://hrzine.jp/rss/new/index.xml
+    name: HRzine
 
+  # ---- グローバル HRテック企業 ----
   - url: https://www.lever.co/blog/feed/
     name: Lever Blog
 
   - url: https://lattice.com/blog/rss.xml
     name: Lattice Blog
-
-  # ---- AI企業プロダクト発表（AI機能競合動向）----
-  - url: https://openai.com/blog/rss.xml
-    name: OpenAI Blog
-
-  - url: https://huggingface.co/blog/feed.xml
-    name: Hugging Face Blog
-
-  - url: https://research.google/blog/rss/
-    name: Google Research Blog
-
-  # ---- HR Tech メディア（競合プロダクト情報）----
-  - url: https://www.hrtechoutlook.com/rss-feeds/
-    name: HR Tech Outlook

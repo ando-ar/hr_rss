@@ -1,47 +1,47 @@
 exclude_keywords:
-  # 純粋な技術実装・アルゴリズム解説（プロダクト動向調査には不要）
+  # 入社後の人事領域（採用・雇用・マッチング以外）
+  # 日本語
+  - タレントマネジメント
+  - 研修
+  - 学習管理
+  - eラーニング
+  - スキルアップ
+  - エンゲージメント
+  - 福利厚生
+  - 評価制度
+  - 人事評価
+  - 1on1
+  - 組織開発
+  - ピープルアナリティクス
+
+  # English
+  - talent management
+  - learning management
+  - employee engagement
+  - performance review
+  - benefits administration
+  - onboarding
+  - people analytics
+
+  # 純粋な技術実装・論文
   # 日本語
   - チュートリアル
   - ハンズオン
-  - 実装してみた
-  - やってみた
-  - 入門
-  - コードリーディング
-  - アルゴリズム解説
+  - 論文紹介
   # English
   - tutorial
-  - how to implement
-  - step by step
-  - getting started
   - hands-on
-  - code walkthrough
-
-  # 論文・学術コンテンツ
-  # 日本語
-  - 論文紹介
-  - 論文読み
-  - arxiv
-  # English
   - paper review
   - arxiv
-  - research paper
-
-  # 純粋インフラ記事（競合プロダクト調査には直接関係しない）
-  # English
-  - kubernetes
-  - terraform
-  - CI/CD pipeline
 
   # イベント告知・求人
   # 日本語
   - 勉強会
   - 求人
-  - インターン
   # English
   - meetup
   - webinar
   - "we're hiring"
   - job opening
 
-  # 注意: 資金調達・提携・買収・M&Aはここに含めない
-  # → 競合の強化シグナルとして積極的に収集する
+  # 注意: 資金調達・提携・買収は除外しない（競合シグナル）

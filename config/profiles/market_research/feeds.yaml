@@ -1,5 +1,5 @@
 feeds:
-  # ---- 国内 HRテック企業（コーポレート・プロダクト情報）----
+  # ---- 国内 HRテック企業 ----
   - url: https://tech.smarthr.jp/feed
     name: SmartHR Tech Blog
 
@@ -24,29 +24,20 @@ feeds:
   - url: https://engineer.wantedly.com/feed
     name: Wantedly Engineer Blog
 
-  # ---- グローバル HR業界メディア（市場・動向）----
+  # ---- 国内 HR業界メディア ----
+  - url: https://hrzine.jp/rss/new/index.xml
+    name: HRzine
+
+  # ---- グローバル HR業界メディア ----
   - url: https://www.hrdive.com/feeds/news/
     name: HR Dive
 
   - url: https://hrexecutive.com/feed/
     name: HR Executive
 
-  - url: https://www.hrtechoutlook.com/rss-feeds/
-    name: HR Tech Outlook
-
-  # ---- グローバル HRテック企業（ビジネス・プロダクト）----
-  - url: https://engineering.linkedin.com/blog.rss
-    name: LinkedIn Engineering Blog
-
+  # ---- グローバル HRテック企業 ----
   - url: https://www.lever.co/blog/feed/
     name: Lever Blog
 
   - url: https://lattice.com/blog/rss.xml
     name: Lattice Blog
-
-  # ---- AI・テクノロジー業界動向（市場シグナル）----
-  - url: https://openai.com/blog/rss.xml
-    name: OpenAI Blog
-
-  - url: https://www.amazon.science/index.rss
-    name: Amazon Science Blog

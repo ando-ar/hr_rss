@@ -220,10 +220,14 @@ def print_results(results: list[FeedCheckResult], verbose: bool) -> None:
 @click.option("--timeout", default=15.0, show_default=True, help="タイムアウト（秒）")
 @click.option("--workers", default=10, show_default=True, help="並列スレッド数")
 @click.option("--verbose/--no-verbose", default=True, help="全結果 / NG のみ表示")
-def main(timeout: float, workers: int, verbose: bool) -> None:
-    config = Config()
+@click.option(
+    "--profile", default=None, help="プロファイル名（config/profiles/<name>/）"
+)
+def main(timeout: float, workers: int, verbose: bool, profile: str | None) -> None:
+    config = Config(profile=profile)
+    label = f"profile={profile}" if profile else "default"
     click.echo(
-        f"Checking {len(config.feeds)} feeds "
+        f"Checking {len(config.feeds)} feeds [{label}] "
         f"(timeout={timeout}s, workers={workers})...\n"
     )
     results = check_all_feeds(config.feeds, timeout, workers)

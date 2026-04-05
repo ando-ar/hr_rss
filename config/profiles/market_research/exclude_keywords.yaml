@@ -1,34 +1,42 @@
 exclude_keywords:
-  # 純粋な技術実装・開発記事（市場リサーチには不要）
+  # 入社後の人事領域（採用・雇用・マッチング以外）
+  # 日本語
+  - タレントマネジメント
+  - 研修
+  - 学習管理
+  - eラーニング
+  - スキルアップ
+  - エンゲージメント
+  - 福利厚生
+  - 評価制度
+  - 人事評価
+  - 1on1
+  - 組織開発
+  - ピープルアナリティクス
+
+  # English
+  - talent management
+  - learning management
+  - employee engagement
+  - performance review
+  - benefits administration
+  - onboarding
+  - people analytics
+
+  # 純粋な技術実装記事
   # 日本語
   - チュートリアル
   - ハンズオン
   - 実装してみた
-  - やってみた
-  - 入門
-  - コードリーディング
-  - デプロイ
   # English
   - tutorial
-  - how to implement
-  - step by step
-  - getting started
   - hands-on
-  - code walkthrough
+  - step by step
 
-  # 純粋なイベント告知（告知のみで内容がないもの）
+  # イベント告知・求人
   # 日本語
   - 勉強会
   - ミートアップ
   # English
   - meetup
   - webinar
-
-  # 求人・採用（個社の採用活動は市場動向ではない）
-  # 日本語
-  - 求人
-  - インターン
-  - エンジニア募集
-  # English
-  - "we're hiring"
-  - job opening
