@@ -24,10 +24,16 @@ from hr_rss.llm import (
     classify_article,
     get_model,
     get_stats,
+    reset_llm_cache,
     reset_stats,
     summarize_and_label,
 )
-from hr_rss.renderer import render_html, render_markdown
+from hr_rss.renderer import (
+    ProfileResult,
+    render_html,
+    render_html_multi_profile,
+    render_markdown,
+)
 from hr_rss.scraper import scrape_text
 
 load_dotenv()
@@ -126,6 +132,151 @@ def setup_cmd() -> None:
     click.echo("")
 
 
+def _run_single_profile(
+    config: Config,
+    days: int,
+    no_db: bool,
+    db_path: str | None,
+) -> tuple[list[Article], dict[str, str], int, int, int]:
+    """1プロファイル分のパイプラインを実行する。
+
+    戻り値: (articles, summaries, n_fetched, n_after_filter, n_classified)
+    """
+    fetchers = {
+        "rss": fetch_feed,
+        "github_issues": fetch_github_issues,
+    }
+
+    # 1. 全フィードから記事を収集
+    all_articles: list[Article] = []
+    label_prefix = f"[{config.profile_name}] " if config.profile_name else ""
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task(
+            f"{label_prefix}フィード取得中...", total=len(config.feeds)
+        )
+        for feed in config.feeds:
+            url = feed["url"]
+            name = feed.get("name", url)
+            progress.update(task, description=f"{label_prefix}取得中: {name}")
+            feed_type = feed.get("type", "rss")
+            fetcher_fn = fetchers.get(feed_type, fetch_feed)
+            articles = fetcher_fn(url, days=days, source=name)
+            all_articles.extend(articles)
+            progress.advance(task)
+
+    logger.info(f"Fetched {len(all_articles)} articles total")
+
+    # 2. キーワードフィルタ
+    after_keyword = [
+        a for a in all_articles if not is_excluded(a.title, config.exclude_keywords)
+    ]
+    logger.info(f"{len(after_keyword)} articles after keyword filter")
+
+    # 3. DB に保存し、未処理分のみLLM対象とする
+    db = None
+    if no_db:
+        to_classify = after_keyword
+    else:
+        resolved_db = Path(db_path) if db_path else get_db_path(config.profile_name)
+        db = ArticleDB(resolved_db)
+        inserted, skipped = db.upsert_articles(after_keyword)
+        logger.info(f"DB: {inserted} inserted, {skipped} skipped (already exists)")
+        to_classify = db.get_unprocessed()
+        logger.info(f"{len(to_classify)} unprocessed articles to classify")
+
+    llm_config_dir = config.config_dir
+    llm_base_dir = config.base_dir if config.profile_name else None
+
+    # 4. LLM Step1: 技術記事か判定
+    tech_articles: list[Article] = []
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task(f"{label_prefix}LLM 分類中...", total=len(to_classify))
+        for article in to_classify:
+            progress.update(
+                task, description=f"{label_prefix}分類中: {article.title[:40]}..."
+            )
+            if classify_article(
+                title=article.title,
+                excerpt=article.excerpt,
+                config_dir=llm_config_dir,
+                base_dir=llm_base_dir,
+            ):
+                tech_articles.append(article)
+                logger.info(f"[PASS] {article.title}")
+            else:
+                logger.info(f"[SKIP] {article.title}")
+                if db is not None:
+                    db.update_processed(article.url, summary="", labels=[])
+            progress.advance(task)
+
+    logger.info(f"{len(tech_articles)} articles passed LLM classification")
+
+    # 5. LLM Step2: 本文スクレイプ → 要約 + ラベリング
+    summaries: dict[str, str] = {}
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task(
+            f"{label_prefix}LLM 要約中...", total=len(tech_articles)
+        )
+        for article in tech_articles:
+            progress.update(
+                task, description=f"{label_prefix}要約中: {article.title[:40]}..."
+            )
+            full_text = scrape_text(article.url)
+            summary, labels = summarize_and_label(
+                title=article.title,
+                full_text=full_text or article.excerpt,
+                url=article.url,
+                config_dir=llm_config_dir,
+                base_dir=llm_base_dir,
+            )
+            summaries[article.url] = summary
+            article.labels = labels
+            logger.info(f"Labels: {labels}")
+            if db is not None:
+                db.update_processed(
+                    article.url,
+                    summary=summary,
+                    labels=labels,
+                    full_text=full_text or "",
+                )
+            progress.advance(task)
+
+    # 6. 出力対象
+    if no_db or db is None:
+        output_articles = tech_articles
+        output_summaries = summaries
+    else:
+        output_articles = db.get_all_processed()
+        output_summaries = db.get_all_summaries()
+        db.close()
+
+    return (
+        output_articles,
+        output_summaries,
+        len(all_articles),
+        len(after_keyword),
+        len(tech_articles),
+    )
+
+
 @cli.command("run")
 @click.option(
     "--days", default=7, show_default=True, help="何日前までの記事を対象にするか"
@@ -153,139 +304,97 @@ def setup_cmd() -> None:
     default=True,
     help="生成後にブラウザで自動オープン（デフォルト: ON）",
 )
+@click.option(
+    "--profile",
+    default=None,
+    help="実行するプロファイル名（config/profiles/<name>/）",
+)
+@click.option(
+    "--all-profiles",
+    "all_profiles",
+    is_flag=True,
+    default=False,
+    help="config/profiles/ 以下の全プロファイルを実行して統合HTMLを出力",
+)
 def run_cmd(
     days: int,
     output: str | None,
     db_path: str | None,
     no_db: bool,
     open_browser: bool,
+    profile: str | None,
+    all_profiles: bool,
 ) -> None:
     """HR tech技術記事をRSSから収集し、Markdownにまとめる。"""
+    if profile and all_profiles:
+        raise click.UsageError("--profile と --all-profiles は同時に指定できません。")
+
     _validate_env()
-    config = Config()
-    reset_stats()
 
-    fetchers = {
-        "rss": fetch_feed,
-        "github_issues": fetch_github_issues,
-    }
+    date_str = datetime.now(UTC).strftime("%Y%m%d")
+    OUTPUT_DIR.mkdir(exist_ok=True)
 
-    # 1. 全フィードから記事を収集
-    all_articles: list[Article] = []
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("フィード取得中...", total=len(config.feeds))
-        for feed in config.feeds:
-            url = feed["url"]
-            name = feed.get("name", url)
-            progress.update(task, description=f"取得中: {name}")
-            feed_type = feed.get("type", "rss")
-            fetcher_fn = fetchers.get(feed_type, fetch_feed)
-            articles = fetcher_fn(url, days=days, source=name)
-            all_articles.extend(articles)
-            progress.advance(task)
-
-    logger.info(f"Fetched {len(all_articles)} articles total")
-
-    # 2. キーワードフィルタ
-    after_keyword = [
-        a for a in all_articles if not is_excluded(a.title, config.exclude_keywords)
-    ]
-    logger.info(f"{len(after_keyword)} articles after keyword filter")
-
-    # 3. DB に保存し、未処理分のみLLM対象とする
-    if no_db:
-        to_classify = after_keyword
-    else:
-        resolved_db = Path(db_path) if db_path else get_db_path()
-        db = ArticleDB(resolved_db)
-        inserted, skipped = db.upsert_articles(after_keyword)
-        logger.info(f"DB: {inserted} inserted, {skipped} skipped (already exists)")
-        to_classify = db.get_unprocessed()
-        logger.info(f"{len(to_classify)} unprocessed articles to classify")
-
-    # 4. LLM Step1: 技術記事か判定
-    tech_articles: list[Article] = []
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("LLM 分類中...", total=len(to_classify))
-        for article in to_classify:
-            progress.update(task, description=f"分類中: {article.title[:40]}...")
-            if classify_article(title=article.title, excerpt=article.excerpt):
-                tech_articles.append(article)
-                logger.info(f"[PASS] {article.title}")
-            else:
-                logger.info(f"[SKIP] {article.title}")
-                if not no_db:
-                    db.update_processed(article.url, summary="", labels=[])
-            progress.advance(task)
-
-    logger.info(f"{len(tech_articles)} articles passed LLM classification")
-
-    # 5. LLM Step2: 本文スクレイプ → 要約 + ラベリング
-    summaries: dict[str, str] = {}
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("LLM 要約中...", total=len(tech_articles))
-        for article in tech_articles:
-            progress.update(task, description=f"要約中: {article.title[:40]}...")
-            full_text = scrape_text(article.url)
-            summary, labels = summarize_and_label(
-                title=article.title,
-                full_text=full_text or article.excerpt,
-                url=article.url,
+    if all_profiles:
+        # --- 全プロファイル実行モード ---
+        base_config_dir = Config()._dir
+        profiles_dir = base_config_dir / "profiles"
+        if not profiles_dir.exists():
+            raise click.ClickException(
+                f"config/profiles/ ディレクトリが見つかりません: {profiles_dir}\n"
+                "  → まず config/profiles/<プロファイル名>/ を作成してください。"
             )
-            summaries[article.url] = summary
-            article.labels = labels
-            logger.info(f"Labels: {labels}")
-            if not no_db:
-                db.update_processed(
-                    article.url,
-                    summary=summary,
-                    labels=labels,
-                    full_text=full_text or "",
-                )
-            progress.advance(task)
+        profile_names = sorted(d.name for d in profiles_dir.iterdir() if d.is_dir())
+        if not profile_names:
+            raise click.ClickException(
+                "config/profiles/ にプロファイルが1つもありません。"
+            )
 
-    # 6. 出力対象：DB使用時はDB経由で日付範囲を取得、no-db時はtech_articles直接
-    if no_db:
-        output_articles = tech_articles
-        output_summaries = summaries
-    else:
-        now_dt = datetime.now(UTC)
-        cutoff_dt = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-        from datetime import timedelta
+        click.echo(f"プロファイル: {', '.join(profile_names)}")
+        profile_results: list[ProfileResult] = []
+        for pname in profile_names:
+            reset_stats()
+            reset_llm_cache()
+            pconfig = Config(profile=pname)
+            articles, summaries, n_fetched, n_filter, n_classified = (
+                _run_single_profile(pconfig, days, no_db, db_path)
+            )
+            profile_results.append(ProfileResult(pname, articles, summaries))
+            _print_summary(
+                n_feeds=len(pconfig.feeds),
+                n_fetched=n_fetched,
+                n_after_filter=n_filter,
+                n_classified=n_classified,
+            )
 
-        since_dt = cutoff_dt - timedelta(days=days - 1)
-        output_articles = db.get_articles_in_range(since_dt, now_dt)
-        output_summaries = db.get_summaries_in_range(since_dt, now_dt)
-        db.close()
+        html_content = render_html_multi_profile(profile_results, days=days)
+        html_path = (
+            Path(output).with_suffix(".html")
+            if output
+            else OUTPUT_DIR / f"output_{date_str}_all.html"
+        )
+        html_path.write_text(html_content, encoding="utf-8")
+        logger.success(f"Written to {html_path}")
+        if open_browser:
+            _open_browser(html_path)
+        return
 
-    # 7. 出力 (Markdown + HTML)
+    # --- 単一プロファイル or デフォルト実行モード ---
+    reset_stats()
+    config = Config(profile=profile)
+    output_articles, output_summaries, n_fetched, n_filter, n_classified = (
+        _run_single_profile(config, days, no_db, db_path)
+    )
+
     md = render_markdown(output_articles, summaries=output_summaries, days=days)
     html_content = render_html(output_articles, summaries=output_summaries, days=days)
 
-    date_str = datetime.now(UTC).strftime("%Y%m%d")
     if output:
         md_path = Path(output)
         html_path = md_path.with_suffix(".html")
+    elif profile:
+        md_path = OUTPUT_DIR / f"output_{date_str}_{profile}.md"
+        html_path = OUTPUT_DIR / f"output_{date_str}_{profile}.html"
     else:
-        OUTPUT_DIR.mkdir(exist_ok=True)
         md_path = OUTPUT_DIR / f"output_{date_str}.md"
         html_path = OUTPUT_DIR / f"output_{date_str}.html"
 
@@ -296,9 +405,9 @@ def run_cmd(
 
     _print_summary(
         n_feeds=len(config.feeds),
-        n_fetched=len(all_articles),
-        n_after_filter=len(after_keyword),
-        n_classified=len(tech_articles),
+        n_fetched=n_fetched,
+        n_after_filter=n_filter,
+        n_classified=n_classified,
     )
 
     if open_browser:

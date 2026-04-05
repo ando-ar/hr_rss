@@ -29,7 +29,7 @@ uv sync
 ### 3. 初期設定
 
 ```bash
-uv run python -m hr_rss setup
+uv run hr-rss setup
 ```
 
 対話形式で以下を自動セットアップします：
@@ -57,14 +57,16 @@ APIキーは [console.anthropic.com](https://console.anthropic.com) で発行で
 
 ```bash
 # 過去7日分の記事を収集してDBに保存（デフォルト）
-uv run python -m hr_rss run
+uv run hr-rss run
 
 # 過去14日分
-uv run python -m hr_rss run --days 14
+uv run hr-rss run --days 14
 ```
 
 実行が完了すると `output/` ディレクトリに `.md` と `.html` の2ファイルが生成され、ブラウザが自動的に開きます。
 収集した記事は `output/hr_rss.db`（SQLite）に蓄積されます。同じURLの記事は重複してLLM処理されません。
+
+**出力内容について**: HTMLにはDBに蓄積された要約済み記事が全件表示されます。サイドバーの「月で絞り込む」ボタンで YYYY/MM 単位に絞り込めます。
 
 | オプション | デフォルト | 説明 |
 |---|---|---|
@@ -82,10 +84,10 @@ uv run python -m hr_rss run --days 14
 
 ```bash
 # 2026年3月の記事をまとめて出力
-uv run python -m hr_rss report --from 2026-03-01 --to 2026-03-31
+uv run hr-rss report --from 2026-03-01 --to 2026-03-31
 
 # --to を省略すると今日まで
-uv run python -m hr_rss report --from 2026-04-01
+uv run hr-rss report --from 2026-04-01
 ```
 
 | オプション | デフォルト | 説明 |

@@ -22,16 +22,17 @@ CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published);
 """
 
 
-def get_db_path() -> Path:
-    """プロジェクトルートの output/hr_rss.db を返す。"""
+def get_db_path(profile: str | None = None) -> Path:
+    """プロジェクトルートの output/hr_rss[_profile].db を返す。"""
+    db_name = f"hr_rss_{profile}.db" if profile else "hr_rss.db"
     for parent in [Path.cwd(), *Path.cwd().parents]:
         if (parent / "pyproject.toml").exists():
             output_dir = parent / "output"
             output_dir.mkdir(exist_ok=True)
-            return output_dir / "hr_rss.db"
+            return output_dir / db_name
     output_dir = Path.cwd() / "output"
     output_dir.mkdir(exist_ok=True)
-    return output_dir / "hr_rss.db"
+    return output_dir / db_name
 
 
 def _row_to_article(row: sqlite3.Row) -> Article:
@@ -142,5 +143,28 @@ class ArticleDB:
               AND published <= ?
             """,
             (date_from.isoformat(), date_to.isoformat()),
+        )
+        return {row["url"]: row["summary"] for row in cur.fetchall()}
+
+    def get_all_processed(self) -> list[Article]:
+        """is_processed=1 かつ summary が存在する全記事を published 降順で返す。"""
+        cur = self._conn.execute(
+            """
+            SELECT * FROM articles
+            WHERE is_processed = 1
+              AND summary != ''
+            ORDER BY published DESC
+            """
+        )
+        return [_row_to_article(row) for row in cur.fetchall()]
+
+    def get_all_summaries(self) -> dict[str, str]:
+        """get_all_processed と同じ条件の {url: summary} dict を返す。"""
+        cur = self._conn.execute(
+            """
+            SELECT url, summary FROM articles
+            WHERE is_processed = 1
+              AND summary != ''
+            """
         )
         return {row["url"]: row["summary"] for row in cur.fetchall()}
