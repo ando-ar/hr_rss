@@ -167,14 +167,12 @@ def render_html(
     .sidebar-clear:hover { color: #1a1d2e; }
     .month-select { display: flex; flex-direction: column; gap: 3px;
         margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e8eaf0; }
-    .month-btn {
-        display: block; width: 100%; text-align: left; border: none; cursor: pointer;
-        padding: 4px 8px; border-radius: 6px; font-size: 0.82rem; font-weight: 600;
-        background: transparent; color: #7a7f99; font-family: inherit;
-        transition: background 0.12s;
-    }
-    .month-btn:hover { background: #f0f2f8; }
-    .month-btn.active { background: #2563eb; color: #fff; }
+    .month-radio { display: flex; align-items: center; gap: 7px; cursor: pointer;
+        padding: 3px 4px; border-radius: 6px; font-size: 0.82rem;
+        color: #3a3f55; transition: background 0.12s; }
+    .month-radio:hover { background: #f0f2f8; }
+    .month-radio input[type=radio] { width: 14px; height: 14px; flex-shrink: 0;
+        cursor: pointer; accent-color: #2563eb; }
     .label-checks { display: flex; flex-direction: column; gap: 4px; }
     .label-check {
         display: flex;
@@ -340,13 +338,9 @@ def render_html(
         });
       }
 
-      document.querySelectorAll('.month-btn').forEach(function(btn){
-        btn.addEventListener('click', function(){
-          document.querySelectorAll('.month-btn').forEach(function(b){
-            b.classList.remove('active');
-          });
-          btn.classList.add('active');
-          activeMonth = btn.dataset.month;
+      document.querySelectorAll('input[name="month"]').forEach(function(radio){
+        radio.addEventListener('change', function(){
+          activeMonth = this.value;
           applyFilter();
         });
       });
@@ -361,11 +355,15 @@ def render_html(
         m = a.published.strftime("%Y-%m")
         if m not in months_seen:
             months_seen.append(m)
-    month_btns = ['<button class="month-btn active" data-month="">すべて</button>']
+    month_btns = [
+        '<label class="month-radio">'
+        '<input type="radio" name="month" value="" checked> すべて</label>'
+    ]
     for m in months_seen:
         label_m = m[:4] + "/" + m[5:]
         month_btns.append(
-            f'<button class="month-btn" data-month="{m}">{label_m}</button>'
+            f'<label class="month-radio">'
+            f'<input type="radio" name="month" value="{m}"> {label_m}</label>'
         )
     month_html = (
         '<div class="sidebar-title">月で絞り込む</div>\n'
@@ -545,17 +543,22 @@ def _build_cards_html(articles: list[Article], summaries: dict[str, str]) -> str
 
 
 def _build_sidebar_html(articles: list[Article], count_id: str) -> str:
-    # 月ボタン
+    # 月ラジオボタン（name はパネルごとに固有）
+    radio_name = f"month-{count_id}"
     months_seen: list[str] = []
     for a in articles:
         m = a.published.strftime("%Y-%m")
         if m not in months_seen:
             months_seen.append(m)
-    month_btns = ['<button class="month-btn active" data-month="">すべて</button>']
+    month_btns = [
+        f'<label class="month-radio">'
+        f'<input type="radio" name="{radio_name}" value="" checked> すべて</label>'
+    ]
     for m in months_seen:
         label_m = m[:4] + "/" + m[5:]
         month_btns.append(
-            f'<button class="month-btn" data-month="{m}">{label_m}</button>'
+            f'<label class="month-radio">'
+            f'<input type="radio" name="{radio_name}" value="{m}"> {label_m}</label>'
         )
     month_html = (
         '<div class="sidebar-title">月で絞り込む</div>\n'
@@ -676,6 +679,14 @@ def render_html_multi_profile(
         margin-bottom: 8px; border-bottom: 1px solid #e8eaf0; padding-bottom: 10px;
     }
     .sidebar-clear:hover { color: #1a1d2e; }
+    .month-select { display: flex; flex-direction: column; gap: 3px;
+        margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e8eaf0; }
+    .month-radio { display: flex; align-items: center; gap: 7px; cursor: pointer;
+        padding: 3px 4px; border-radius: 6px; font-size: 0.82rem;
+        color: #3a3f55; transition: background 0.12s; }
+    .month-radio:hover { background: #f0f2f8; }
+    .month-radio input[type=radio] { width: 14px; height: 14px; flex-shrink: 0;
+        cursor: pointer; accent-color: #2563eb; }
     .label-checks { display: flex; flex-direction: column; gap: 4px; }
     .label-check { display: flex; align-items: center; gap: 7px; cursor: pointer;
         padding: 3px 4px; border-radius: 6px; transition: background 0.12s; }
@@ -758,8 +769,9 @@ def render_html_multi_profile(
           '.source-check input[type=checkbox]');
         var cards = panel.querySelectorAll('.card');
         var countEl = panel.querySelector('.result-count');
-        var activeMonthBtn = panel.querySelector('.month-btn.active');
-        var activeMonth = activeMonthBtn ? activeMonthBtn.dataset.month : '';
+        var activeMonthRadio = panel.querySelector(
+          '.month-radio input[type=radio]:checked');
+        var activeMonth = activeMonthRadio ? activeMonthRadio.value : '';
         var searchInput = panel.querySelector('.search-input');
         var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
         var selected = [];
@@ -809,14 +821,9 @@ def render_html_multi_profile(
             applyFilter(panel);
           });
         }
-        panel.querySelectorAll('.month-btn').forEach(function(btn){
-          btn.addEventListener('click', function(){
-            panel.querySelectorAll('.month-btn').forEach(function(b){
-              b.classList.remove('active');
-            });
-            btn.classList.add('active');
-            applyFilter(panel);
-          });
+        panel.querySelectorAll('.month-radio input[type=radio]').forEach(
+          function(radio){
+          radio.addEventListener('change', function(){ applyFilter(panel); });
         });
         applyFilter(panel);
       });
