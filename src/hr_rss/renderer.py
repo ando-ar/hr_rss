@@ -43,11 +43,16 @@ def _chip_html(label: str) -> str:
 
 
 def render_markdown(
-    articles: list[Article], summaries: dict[str, str], days: int
+    articles: list[Article],
+    summaries: dict[str, str],
+    days: int | None = None,
+    *,
+    label: str | None = None,
 ) -> str:
     now = datetime.now(UTC).strftime("%Y-%m-%d")
+    header_label = label if label else f"過去 {days} 日間"
     lines: list[str] = [
-        f"# HR Tech 技術記事まとめ（過去 {days} 日間）",
+        f"# HR Tech 技術記事まとめ（{header_label}）",
         f"生成日: {now}",
         "",
     ]
@@ -77,7 +82,13 @@ def render_markdown(
     return "\n".join(lines)
 
 
-def render_html(articles: list[Article], summaries: dict[str, str], days: int) -> str:
+def render_html(
+    articles: list[Article],
+    summaries: dict[str, str],
+    days: int | None = None,
+    *,
+    label: str | None = None,
+) -> str:
     now = datetime.now(UTC).strftime("%Y-%m-%d")
 
     css = """
@@ -241,6 +252,7 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
             )
         cards_html = "\n".join(card_parts)
 
+    header_label = label if label else f"過去 {days} 日間"
     count = len(articles)
     return (
         f"<!DOCTYPE html>\n"
@@ -248,7 +260,7 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
         f"<head>\n"
         f'  <meta charset="utf-8">\n'
         f'  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"  <title>HR Tech 技術記事まとめ（過去 {days} 日間）</title>\n"
+        f"  <title>HR Tech 技術記事まとめ（{header_label}）</title>\n"
         f"  <style>{css}</style>\n"
         f"</head>\n"
         f"<body>\n"
@@ -256,7 +268,7 @@ def render_html(articles: list[Article], summaries: dict[str, str], days: int) -
         f'    <div class="header-inner">\n'
         f"      <h1>HR Tech 技術記事まとめ</h1>\n"
         f'      <p class="header-meta">'
-        f"生成日: {now}&emsp;|&emsp;過去 {days} 日間&emsp;|&emsp;{count} 件</p>\n"
+        f"生成日: {now}&emsp;|&emsp;{header_label}&emsp;|&emsp;{count} 件</p>\n"
         f'      <div class="filter-bar">\n'
         f"        {filter_bar_html}\n"
         f"      </div>\n"

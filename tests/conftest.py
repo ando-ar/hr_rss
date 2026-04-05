@@ -14,9 +14,12 @@ Hypothesis プロファイル:
 """
 
 import os
+from datetime import UTC, datetime
 
 import pytest
 from hypothesis import HealthCheck, settings
+
+from hr_rss.fetcher import Article
 
 # ---------------------------------------------------------------------------
 # Hypothesis プロファイル
@@ -46,3 +49,28 @@ settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "dev"))
 def tmp_data_dir(tmp_path):
     """一時作業ディレクトリ。"""
     return tmp_path
+
+
+# ---------------------------------------------------------------------------
+# Articleファクトリー
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def make_article():
+    """Article インスタンスを生成するファクトリー関数を返す。"""
+
+    def _make(
+        title: str = "テスト記事",
+        url: str = "https://example.com",
+        published: datetime | None = None,
+        **kwargs,
+    ) -> Article:
+        return Article(
+            title=title,
+            url=url,
+            excerpt="概要テキスト",
+            published=published or datetime.now(UTC),
+            source="Test Blog",
+            **kwargs,
+        )
+
+    return _make

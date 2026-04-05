@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from hr_rss.config import Config
+from hr_rss.db import ArticleDB, get_db_path
 from hr_rss.fetcher import Article, fetch_feed, fetch_github_issues
 from hr_rss.filter import is_excluded
 from hr_rss.llm import classify_article, get_stats, reset_stats, summarize_and_label
@@ -17,7 +18,12 @@ load_dotenv()
 OUTPUT_DIR = Path("output")
 
 
-@click.command()
+@click.group()
+def cli() -> None:
+    """HR tech技術記事RSSアグリゲーター。"""
+
+
+@cli.command("run")
 @click.option(
     "--days", default=7, show_default=True, help="何日前までの記事を対象にするか"
 )
@@ -26,7 +32,19 @@ OUTPUT_DIR = Path("output")
     default=None,
     help="出力ファイルパス（省略時は output/output_YYYYMMDD.md）",
 )
-def main(days: int, output: str | None) -> None:
+@click.option(
+    "--db",
+    "db_path",
+    default=None,
+    help="DBファイルパス（省略時は output/hr_rss.db）",
+)
+@click.option(
+    "--no-db",
+    is_flag=True,
+    default=False,
+    help="DB永続化をスキップして従来通りに動作する",
+)
+def run_cmd(days: int, output: str | None, db_path: str | None, no_db: bool) -> None:
     """HR tech技術記事をRSSから収集し、Markdownにまとめる。"""
     config = Config()
     reset_stats()
@@ -55,18 +73,32 @@ def main(days: int, output: str | None) -> None:
     ]
     logger.info(f"{len(after_keyword)} articles after keyword filter")
 
-    # 3. LLM Step1: 技術記事か判定
+    # 3. DB に保存し、未処理分のみLLM対象とする
+    if no_db:
+        to_classify = after_keyword
+    else:
+        resolved_db = Path(db_path) if db_path else get_db_path()
+        db = ArticleDB(resolved_db)
+        inserted, skipped = db.upsert_articles(after_keyword)
+        logger.info(f"DB: {inserted} inserted, {skipped} skipped (already exists)")
+        to_classify = db.get_unprocessed()
+        logger.info(f"{len(to_classify)} unprocessed articles to classify")
+
+    # 4. LLM Step1: 技術記事か判定
     tech_articles: list[Article] = []
-    for article in after_keyword:
+    for article in to_classify:
         if classify_article(title=article.title, excerpt=article.excerpt):
             tech_articles.append(article)
             logger.info(f"[PASS] {article.title}")
         else:
             logger.info(f"[SKIP] {article.title}")
+            if not no_db:
+                # 技術記事でないと判定されたものも処理済みとしてマーク
+                db.update_processed(article.url, summary="", labels=[])
 
     logger.info(f"{len(tech_articles)} articles passed LLM classification")
 
-    # 4. LLM Step2: 本文スクレイプ → 要約 + ラベリング
+    # 5. LLM Step2: 本文スクレイプ → 要約 + ラベリング
     summaries: dict[str, str] = {}
     for article in tech_articles:
         logger.info(f"Scraping: {article.url}")
@@ -79,10 +111,28 @@ def main(days: int, output: str | None) -> None:
         summaries[article.url] = summary
         article.labels = labels
         logger.info(f"Labels: {labels}")
+        if not no_db:
+            db.update_processed(
+                article.url, summary=summary, labels=labels, full_text=full_text or ""
+            )
 
-    # 5. 出力 (Markdown + HTML)
-    md = render_markdown(tech_articles, summaries=summaries, days=days)
-    html_content = render_html(tech_articles, summaries=summaries, days=days)
+    # 6. 出力対象：DB使用時はDB経由で日付範囲を取得、no-db時はtech_articles直接
+    if no_db:
+        output_articles = tech_articles
+        output_summaries = summaries
+    else:
+        now_dt = datetime.now(UTC)
+        cutoff_dt = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+
+        since_dt = cutoff_dt - timedelta(days=days - 1)
+        output_articles = db.get_articles_in_range(since_dt, now_dt)
+        output_summaries = db.get_summaries_in_range(since_dt, now_dt)
+        db.close()
+
+    # 7. 出力 (Markdown + HTML)
+    md = render_markdown(output_articles, summaries=output_summaries, days=days)
+    html_content = render_html(output_articles, summaries=output_summaries, days=days)
 
     date_str = datetime.now(UTC).strftime("%Y%m%d")
     if output:
@@ -95,7 +145,7 @@ def main(days: int, output: str | None) -> None:
 
     md_path.write_text(md, encoding="utf-8")
     html_path.write_text(html_content, encoding="utf-8")
-    logger.success(f"Written to {md_path} ({len(tech_articles)} articles)")
+    logger.success(f"Written to {md_path} ({len(output_articles)} articles)")
     logger.success(f"Written to {html_path}")
 
     _print_summary(
@@ -104,6 +154,80 @@ def main(days: int, output: str | None) -> None:
         n_after_filter=len(after_keyword),
         n_classified=len(tech_articles),
     )
+
+
+@cli.command("report")
+@click.option("--from", "date_from", required=True, help="開始日 YYYY-MM-DD")
+@click.option(
+    "--to",
+    "date_to",
+    default=None,
+    help="終了日 YYYY-MM-DD（省略時は今日）",
+)
+@click.option(
+    "--output",
+    default=None,
+    help="出力ファイルパス（省略時は output/report_FROM_TO.md）",
+)
+@click.option(
+    "--db",
+    "db_path",
+    default=None,
+    help="DBファイルパス（省略時は output/hr_rss.db）",
+)
+def report(
+    date_from: str,
+    date_to: str | None,
+    output: str | None,
+    db_path: str | None,
+) -> None:
+    """過去記事をDBから取得してMarkdown/HTML出力する。"""
+    try:
+        dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError as err:
+        raise click.BadParameter(
+            f"日付フォーマットが不正です: {date_from}（YYYY-MM-DD形式で指定）"
+        ) from err
+
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=UTC
+            )
+        except ValueError as err:
+            raise click.BadParameter(
+                f"日付フォーマットが不正です: {date_to}（YYYY-MM-DD形式で指定）"
+            ) from err
+    else:
+        dt_to = datetime.now(UTC)
+        date_to = dt_to.strftime("%Y-%m-%d")
+
+    resolved_db = Path(db_path) if db_path else get_db_path()
+    if not resolved_db.exists():
+        raise click.ClickException(f"DBファイルが見つかりません: {resolved_db}")
+
+    with ArticleDB(resolved_db) as db:
+        articles = db.get_articles_in_range(dt_from, dt_to)
+        summaries = db.get_summaries_in_range(dt_from, dt_to)
+
+    range_label = f"{date_from} 〜 {date_to}"
+    md = render_markdown(articles, summaries=summaries, label=range_label)
+    html_content = render_html(articles, summaries=summaries, label=range_label)
+
+    if output:
+        md_path = Path(output)
+        html_path = md_path.with_suffix(".html")
+    else:
+        OUTPUT_DIR.mkdir(exist_ok=True)
+        from_str = date_from.replace("-", "")
+        to_str = date_to.replace("-", "")
+        md_path = OUTPUT_DIR / f"report_{from_str}_{to_str}.md"
+        html_path = OUTPUT_DIR / f"report_{from_str}_{to_str}.html"
+
+    md_path.write_text(md, encoding="utf-8")
+    html_path.write_text(html_content, encoding="utf-8")
+    logger.success(f"Written to {md_path} ({len(articles)} articles)")
+    logger.success(f"Written to {html_path}")
 
 
 def _print_summary(
@@ -140,4 +264,4 @@ def _print_summary(
 
 
 if __name__ == "__main__":
-    main()
+    cli()

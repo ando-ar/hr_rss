@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from hr_rss.__main__ import main
+from hr_rss.__main__ import run_cmd
 from hr_rss.fetcher import Article
 
 
@@ -29,7 +29,7 @@ def test_main_runs_without_error(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        result = runner.invoke(main, ["--days", "7"])
+        result = runner.invoke(run_cmd, ["--days", "7", "--no-db"])
 
     assert result.exit_code == 0
 
@@ -46,7 +46,7 @@ def test_main_writes_output_to_output_dir(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        runner.invoke(main, ["--days", "7"])
+        runner.invoke(run_cmd, ["--days", "7", "--no-db"])
 
     assert any(tmp_path.iterdir())
 
@@ -63,7 +63,7 @@ def test_main_writes_both_md_and_html(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        runner.invoke(main, ["--days", "7"])
+        runner.invoke(run_cmd, ["--days", "7", "--no-db"])
 
     suffixes = {p.suffix for p in tmp_path.iterdir()}
     assert ".md" in suffixes
@@ -83,7 +83,7 @@ def test_main_explicit_output_path(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        runner.invoke(main, ["--days", "7", "--output", str(output_path)])
+        runner.invoke(run_cmd, ["--days", "7", "--no-db", "--output", str(output_path)])
 
     assert output_path.exists()
 
@@ -105,7 +105,7 @@ def test_main_labels_are_set_on_articles(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        result = runner.invoke(main, ["--days", "7"])
+        result = runner.invoke(run_cmd, ["--days", "7", "--no-db"])
 
     assert result.exit_code == 0
     output_files = {p.suffix: p for p in tmp_path.iterdir()}
