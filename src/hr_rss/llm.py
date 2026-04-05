@@ -27,6 +27,11 @@ _run_stats: dict[str, int] = {
 }
 
 
+def get_model() -> str:
+    """現在使用中のモデル名を返す。"""
+    return _MODEL
+
+
 def reset_stats() -> None:
     """実行開始時に呼び出してトークン集計をリセットする。"""
     for k in _run_stats:

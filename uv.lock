@@ -459,7 +459,9 @@ dependencies = [
     { name = "feedparser" },
     { name = "httpx" },
     { name = "loguru" },
+    { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "rich" },
 ]
 
 [package.dev-dependencies]
@@ -471,7 +473,6 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "python-dotenv" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -484,7 +485,9 @@ requires-dist = [
     { name = "feedparser", specifier = ">=6.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "loguru", specifier = ">=0.7" },
+    { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -496,7 +499,6 @@ dev = [
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=6.0" },
-    { name = "python-dotenv", specifier = ">=1.0" },
     { name = "ruff", specifier = ">=0.9" },
     { name = "ty", specifier = ">=0.0.1a0" },
 ]

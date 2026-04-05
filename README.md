@@ -26,21 +26,34 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uv sync
 ```
 
-### 3. Anthropic API キーの設定
-
-1. [console.anthropic.com](https://console.anthropic.com) でAPIキーを発行
-2. プロジェクトルートに `.env` ファイルを作成
+### 3. 初期設定
 
 ```bash
-# macOS / Linux
-echo 'ANTHROPIC_API_KEY=sk-ant-ここにキーを貼り付け' > .env
+uv run python -m hr_rss setup
 ```
+
+対話形式で以下を自動セットアップします：
+- Anthropic API キーの入力 → `.env` ファイルを作成
+- 設定ファイル（フィード一覧・除外キーワードなど）の初期化
+
+APIキーは [console.anthropic.com](https://console.anthropic.com) で発行できます。
 
 ---
 
 ## 実行
 
-### `run` — 記事を収集してDBに蓄積
+### Windows の場合
+
+プロジェクトフォルダ内の `.bat` ファイルをダブルクリックするだけで実行できます。
+
+| ファイル | 説明 |
+|---|---|
+| `run.bat` | 過去7日間の記事を収集 |
+| `run_report.bat` | 指定期間の記事をDBから再出力 |
+
+### コマンドラインの場合
+
+#### `run` — 記事を収集してDBに蓄積
 
 ```bash
 # 過去7日分の記事を収集してDBに保存（デフォルト）
@@ -48,15 +61,10 @@ uv run python -m hr_rss run
 
 # 過去14日分
 uv run python -m hr_rss run --days 14
-
-# 出力ファイル名を指定
-uv run python -m hr_rss run --output report.md
 ```
 
-実行が完了すると `output/` ディレクトリに `.md` と `.html` の2ファイルが生成されます。
+実行が完了すると `output/` ディレクトリに `.md` と `.html` の2ファイルが生成され、ブラウザが自動的に開きます。
 収集した記事は `output/hr_rss.db`（SQLite）に蓄積されます。同じURLの記事は重複してLLM処理されません。
-
-#### `run` オプション
 
 | オプション | デフォルト | 説明 |
 |---|---|---|
@@ -64,10 +72,11 @@ uv run python -m hr_rss run --output report.md
 | `--output PATH` | `output/output_YYYYMMDD.md` | 出力ファイルのパス（`.html` も同時生成） |
 | `--db PATH` | `output/hr_rss.db` | DBファイルのパス |
 | `--no-db` | `false` | DB永続化をスキップして従来通りに動作する |
+| `--open / --no-open` | `ON` | 生成後にブラウザで自動オープン |
 
 ---
 
-### `report` — 過去記事をDBから出力
+#### `report` — 過去記事をDBから出力
 
 `run` で蓄積した記事を任意の日付範囲で再出力します。LLMを呼ばずに即時生成されます。
 
@@ -77,12 +86,7 @@ uv run python -m hr_rss report --from 2026-03-01 --to 2026-03-31
 
 # --to を省略すると今日まで
 uv run python -m hr_rss report --from 2026-04-01
-
-# 出力ファイル名を指定
-uv run python -m hr_rss report --from 2026-03-01 --to 2026-03-31 --output march.md
 ```
-
-#### `report` オプション
 
 | オプション | デフォルト | 説明 |
 |---|---|---|
@@ -90,6 +94,7 @@ uv run python -m hr_rss report --from 2026-03-01 --to 2026-03-31 --output march.
 | `--to DATE` | 今日 | 終了日（YYYY-MM-DD形式） |
 | `--output PATH` | `output/report_FROM_TO.md` | 出力ファイルのパス（`.html` も同時生成） |
 | `--db PATH` | `output/hr_rss.db` | DBファイルのパス |
+| `--open / --no-open` | `ON` | 生成後にブラウザで自動オープン |
 
 ---
 
@@ -105,12 +110,6 @@ uv run python -m hr_rss report --from 2026-03-01 --to 2026-03-31 --output march.
 
 候補者の職務経歴書をLLMで構造化し、ポジションごとのスコアリングを自動化した事例。
 fine-tuningなしでもプロンプト設計により十分な精度を達成している。
-```
-
-`report` コマンド（日付範囲指定）:
-```markdown
-# HR Tech 技術記事まとめ（2026-03-01 〜 2026-03-31）
-生成日: 2026-04-05
 ```
 
 ---

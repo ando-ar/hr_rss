@@ -1,15 +1,31 @@
+import os
+import shutil
+import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 from dotenv import load_dotenv
 from loguru import logger
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 
 from hr_rss.config import Config
 from hr_rss.db import ArticleDB, get_db_path
 from hr_rss.fetcher import Article, fetch_feed, fetch_github_issues
 from hr_rss.filter import is_excluded
-from hr_rss.llm import classify_article, get_stats, reset_stats, summarize_and_label
+from hr_rss.llm import (
+    classify_article,
+    get_model,
+    get_stats,
+    reset_stats,
+    summarize_and_label,
+)
 from hr_rss.renderer import render_html, render_markdown
 from hr_rss.scraper import scrape_text
 
@@ -17,10 +33,80 @@ load_dotenv()
 
 OUTPUT_DIR = Path("output")
 
+# モデル別単価 ($/MTok)
+_PRICING: dict[str, tuple[float, float]] = {
+    "claude-haiku-4-5-20251001": (0.80, 4.00),
+    "claude-haiku-4-5": (0.80, 4.00),
+    "claude-sonnet-4-5": (3.00, 15.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-6": (15.00, 75.00),
+}
+
+
+def _validate_env() -> None:
+    """APIキーが設定されているか起動前に確認する。"""
+    if not os.environ.get("ANTHROPIC_API_KEY", ""):
+        raise click.ClickException(
+            "ANTHROPIC_API_KEY が設定されていません。\n"
+            "  → .env ファイルに ANTHROPIC_API_KEY=sk-ant-... を記入してください\n"
+            "  → または: uv run python -m hr_rss setup"
+        )
+
 
 @click.group()
 def cli() -> None:
     """HR tech技術記事RSSアグリゲーター。"""
+
+
+@cli.command("setup")
+def setup_cmd() -> None:
+    """初回セットアップ（APIキー設定・設定ファイル初期化）。"""
+    # プロジェクトルートを探す
+    project_root = Path.cwd()
+    for parent in [Path.cwd(), *Path.cwd().parents]:
+        if (parent / "pyproject.toml").exists():
+            project_root = parent
+            break
+
+    click.echo("")
+    click.echo("━" * 50)
+    click.echo(" HR RSS セットアップ")
+    click.echo("━" * 50)
+
+    # .env の作成
+    env_path = project_root / ".env"
+    if env_path.exists():
+        click.echo(f"✓ .env は既に存在します: {env_path}")
+    else:
+        api_key = click.prompt(
+            "\nAnthropicのAPIキーを入力してください\n"
+            "  (取得: https://console.anthropic.com/)\n"
+            "  APIキー",
+            hide_input=True,
+        )
+        env_path.write_text(f"ANTHROPIC_API_KEY={api_key}\n", encoding="utf-8")
+        click.echo(f"✓ .env を作成しました: {env_path}")
+
+    # 設定ファイルのコピー
+    click.echo("")
+    config_dir = project_root / "config"
+    for name in ["feeds.yaml", "exclude_keywords.yaml", "labels.yaml", "prompts.yaml"]:
+        target = config_dir / name
+        sample = config_dir / name.replace(".yaml", ".sample.yaml")
+        if target.exists():
+            click.echo(f"✓ config/{name} は既に存在します")
+        elif sample.exists():
+            shutil.copy(sample, target)
+            click.echo(f"✓ config/{name} を作成しました（サンプルからコピー）")
+        else:
+            click.echo(f"  config/{name}.sample.yaml が見つかりません（スキップ）")
+
+    click.echo("")
+    click.echo("━" * 50)
+    click.echo(" セットアップ完了！以下のコマンドで実行できます：")
+    click.echo("   uv run python -m hr_rss run")
+    click.echo("━" * 50)
+    click.echo("")
 
 
 @cli.command("run")
@@ -44,8 +130,21 @@ def cli() -> None:
     default=False,
     help="DB永続化をスキップして従来通りに動作する",
 )
-def run_cmd(days: int, output: str | None, db_path: str | None, no_db: bool) -> None:
+@click.option(
+    "--open/--no-open",
+    "open_browser",
+    default=True,
+    help="生成後にブラウザで自動オープン（デフォルト: ON）",
+)
+def run_cmd(
+    days: int,
+    output: str | None,
+    db_path: str | None,
+    no_db: bool,
+    open_browser: bool,
+) -> None:
     """HR tech技術記事をRSSから収集し、Markdownにまとめる。"""
+    _validate_env()
     config = Config()
     reset_stats()
 
@@ -56,14 +155,23 @@ def run_cmd(days: int, output: str | None, db_path: str | None, no_db: bool) -> 
 
     # 1. 全フィードから記事を収集
     all_articles: list[Article] = []
-    for feed in config.feeds:
-        url = feed["url"]
-        name = feed.get("name", url)
-        logger.info(f"Fetching: {name}")
-        feed_type = feed.get("type", "rss")
-        fetcher_fn = fetchers.get(feed_type, fetch_feed)
-        articles = fetcher_fn(url, days=days, source=name)
-        all_articles.extend(articles)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task("フィード取得中...", total=len(config.feeds))
+        for feed in config.feeds:
+            url = feed["url"]
+            name = feed.get("name", url)
+            progress.update(task, description=f"取得中: {name}")
+            feed_type = feed.get("type", "rss")
+            fetcher_fn = fetchers.get(feed_type, fetch_feed)
+            articles = fetcher_fn(url, days=days, source=name)
+            all_articles.extend(articles)
+            progress.advance(task)
 
     logger.info(f"Fetched {len(all_articles)} articles total")
 
@@ -86,35 +194,56 @@ def run_cmd(days: int, output: str | None, db_path: str | None, no_db: bool) -> 
 
     # 4. LLM Step1: 技術記事か判定
     tech_articles: list[Article] = []
-    for article in to_classify:
-        if classify_article(title=article.title, excerpt=article.excerpt):
-            tech_articles.append(article)
-            logger.info(f"[PASS] {article.title}")
-        else:
-            logger.info(f"[SKIP] {article.title}")
-            if not no_db:
-                # 技術記事でないと判定されたものも処理済みとしてマーク
-                db.update_processed(article.url, summary="", labels=[])
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task("LLM 分類中...", total=len(to_classify))
+        for article in to_classify:
+            progress.update(task, description=f"分類中: {article.title[:40]}...")
+            if classify_article(title=article.title, excerpt=article.excerpt):
+                tech_articles.append(article)
+                logger.info(f"[PASS] {article.title}")
+            else:
+                logger.info(f"[SKIP] {article.title}")
+                if not no_db:
+                    db.update_processed(article.url, summary="", labels=[])
+            progress.advance(task)
 
     logger.info(f"{len(tech_articles)} articles passed LLM classification")
 
     # 5. LLM Step2: 本文スクレイプ → 要約 + ラベリング
     summaries: dict[str, str] = {}
-    for article in tech_articles:
-        logger.info(f"Scraping: {article.url}")
-        full_text = scrape_text(article.url)
-        summary, labels = summarize_and_label(
-            title=article.title,
-            full_text=full_text or article.excerpt,
-            url=article.url,
-        )
-        summaries[article.url] = summary
-        article.labels = labels
-        logger.info(f"Labels: {labels}")
-        if not no_db:
-            db.update_processed(
-                article.url, summary=summary, labels=labels, full_text=full_text or ""
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task("LLM 要約中...", total=len(tech_articles))
+        for article in tech_articles:
+            progress.update(task, description=f"要約中: {article.title[:40]}...")
+            full_text = scrape_text(article.url)
+            summary, labels = summarize_and_label(
+                title=article.title,
+                full_text=full_text or article.excerpt,
+                url=article.url,
             )
+            summaries[article.url] = summary
+            article.labels = labels
+            logger.info(f"Labels: {labels}")
+            if not no_db:
+                db.update_processed(
+                    article.url,
+                    summary=summary,
+                    labels=labels,
+                    full_text=full_text or "",
+                )
+            progress.advance(task)
 
     # 6. 出力対象：DB使用時はDB経由で日付範囲を取得、no-db時はtech_articles直接
     if no_db:
@@ -155,6 +284,9 @@ def run_cmd(days: int, output: str | None, db_path: str | None, no_db: bool) -> 
         n_classified=len(tech_articles),
     )
 
+    if open_browser:
+        webbrowser.open(html_path.resolve().as_uri())
+
 
 @cli.command("report")
 @click.option("--from", "date_from", required=True, help="開始日 YYYY-MM-DD")
@@ -175,11 +307,18 @@ def run_cmd(days: int, output: str | None, db_path: str | None, no_db: bool) -> 
     default=None,
     help="DBファイルパス（省略時は output/hr_rss.db）",
 )
+@click.option(
+    "--open/--no-open",
+    "open_browser",
+    default=True,
+    help="生成後にブラウザで自動オープン（デフォルト: ON）",
+)
 def report(
     date_from: str,
     date_to: str | None,
     output: str | None,
     db_path: str | None,
+    open_browser: bool,
 ) -> None:
     """過去記事をDBから取得してMarkdown/HTML出力する。"""
     try:
@@ -229,6 +368,9 @@ def report(
     logger.success(f"Written to {md_path} ({len(articles)} articles)")
     logger.success(f"Written to {html_path}")
 
+    if open_browser:
+        webbrowser.open(html_path.resolve().as_uri())
+
 
 def _print_summary(
     n_feeds: int,
@@ -239,6 +381,10 @@ def _print_summary(
     stats = get_stats()
     total_in = stats["classify_in"] + stats["summarize_in"]
     total_out = stats["classify_out"] + stats["summarize_out"]
+
+    model = get_model()
+    price_in, price_out = _PRICING.get(model, (0.0, 0.0))
+    estimated_cost = (total_in * price_in + total_out * price_out) / 1_000_000
 
     w = 50
     click.echo("")
@@ -259,6 +405,8 @@ def _print_summary(
     )
     click.echo("─" * w)
     click.echo(f"  合計トークン:         {total_in:,} in / {total_out:,} out")
+    if price_in > 0:
+        click.echo(f"  推定コスト:           ${estimated_cost:.4f}（概算、{model}）")
     click.echo("━" * w)
     click.echo("")
 
