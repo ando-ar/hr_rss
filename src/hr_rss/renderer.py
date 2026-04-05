@@ -253,19 +253,45 @@ def render_html(
         color: #aab0c8;
         padding: 24px 0 36px;
     }
+    .search-input {
+        width: 100%; padding: 6px 10px; border: 1px solid #d0d4e8;
+        border-radius: 7px; font-size: 0.83rem; font-family: inherit;
+        margin-bottom: 12px; outline: none; color: #1a1d2e;
+    }
+    .search-input:focus { border-color: #2563eb; }
+    .label-count {
+        margin-left: auto; font-size: 0.72rem; color: #aab0c8; font-weight: 500;
+    }
+    .source-checks { display: flex; flex-direction: column; gap: 4px; }
+    .source-check { display: flex; align-items: center; gap: 7px; cursor: pointer;
+        padding: 3px 4px; border-radius: 6px; transition: background 0.12s; }
+    .source-check:hover { background: #f0f2f8; }
+    .source-check input[type=checkbox] { width: 14px; height: 14px; flex-shrink: 0;
+        cursor: pointer; accent-color: #2563eb; }
+    .source-name { font-size: 0.78rem; color: #3a3f55; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; max-width: 118px; }
     """
 
     js = """
     (function(){
       var checkboxes = document.querySelectorAll('.label-check input[type=checkbox]');
+      var sourceCheckboxes = document.querySelectorAll(
+        '.source-check input[type=checkbox]');
       var cards = document.querySelectorAll('.card');
       var clearBtn = document.getElementById('clear-all');
       var countEl = document.getElementById('result-count');
+      var searchInput = document.getElementById('search-input');
       var activeMonth = '';
 
       function getSelected() {
         var sel = [];
         checkboxes.forEach(function(cb){ if(cb.checked) sel.push(cb.value); });
+        return sel;
+      }
+
+      function getSelectedSources() {
+        var sel = [];
+        sourceCheckboxes.forEach(function(cb){ if(cb.checked) sel.push(cb.value); });
         return sel;
       }
 
@@ -277,12 +303,20 @@ def render_html(
 
       function applyFilter() {
         var selected = getSelected();
+        var selectedSources = getSelectedSources();
+        var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
         cards.forEach(function(card){
           var monthMatch = !activeMonth || card.dataset.month === activeMonth;
           var lbls = card.dataset.labels ? JSON.parse(card.dataset.labels) : [];
           var labelMatch = selected.length === 0 ||
             selected.every(function(s){ return lbls.indexOf(s) !== -1; });
-          card.style.display = (monthMatch && labelMatch) ? '' : 'none';
+          var sourceMatch = selectedSources.length === 0 ||
+            selectedSources.indexOf(card.dataset.source) !== -1;
+          var textMatch = !query ||
+            (card.dataset.title || '').toLowerCase().indexOf(query) !== -1 ||
+            (card.dataset.summary || '').toLowerCase().indexOf(query) !== -1;
+          var show = monthMatch && labelMatch && sourceMatch && textMatch;
+          card.style.display = show ? '' : 'none';
         });
         updateCount();
       }
@@ -291,9 +325,17 @@ def render_html(
         cb.addEventListener('change', applyFilter);
       });
 
+      sourceCheckboxes.forEach(function(cb){
+        cb.addEventListener('change', applyFilter);
+      });
+
+      if(searchInput) searchInput.addEventListener('input', applyFilter);
+
       if(clearBtn){
         clearBtn.addEventListener('click', function(){
           checkboxes.forEach(function(cb){ cb.checked = false; });
+          sourceCheckboxes.forEach(function(cb){ cb.checked = false; });
+          if(searchInput) searchInput.value = '';
           applyFilter();
         });
       }
@@ -340,24 +382,56 @@ def render_html(
     unknown_present = sorted(all_present - set(known_order))
     present_labels = known_present + unknown_present
 
+    label_counts: dict[str, int] = {}
+    for _a in articles:
+        for _lb in _a.labels:
+            label_counts[_lb] = label_counts.get(_lb, 0) + 1
+
+    source_counts: dict[str, int] = {}
+    for _a in articles:
+        source_counts[_a.source] = source_counts.get(_a.source, 0) + 1
+    sources_sorted = sorted(source_counts.items(), key=lambda x: -x[1])
+
     clear_btn = '<button class="sidebar-clear" id="clear-all">チェックをクリア</button>'
     check_items = []
     for lb in present_labels:
         esc = _html.escape(lb)
         bg, fg = _label_colors(lb)
+        cnt = label_counts.get(lb, 0)
         check_items.append(
             f'<label class="label-check">'
             f'<input type="checkbox" value="{esc}">'
             f'<span class="label-chip" style="background:{bg};color:{fg}">{esc}</span>'
+            f'<span class="label-count">{cnt}</span>'
             f"</label>"
         )
     checks_html = "\n        ".join(check_items)
+
+    source_items = []
+    for _src, _cnt in sources_sorted:
+        _src_esc = _html.escape(_src)
+        source_items.append(
+            f'<label class="source-check">'
+            f'<input type="checkbox" value="{_src_esc}">'
+            f'<span class="source-name" title="{_src_esc}">{_src_esc}</span>'
+            f'<span class="label-count">{_cnt}</span>'
+            f"</label>"
+        )
+    sources_checks_html = "\n        ".join(source_items)
+
     sidebar_html = (
-        f"{month_html}\n"
+        f'<input type="search" id="search-input" class="search-input"'
+        f' placeholder="タイトル・要約を検索…">\n'
+        f"      {month_html}\n"
         f"      {clear_btn}\n"
         f'      <div class="sidebar-title">ラベルで絞り込む</div>\n'
         f'      <div class="label-checks">\n'
         f"        {checks_html}\n"
+        f"      </div>\n"
+        f'      <div class="sidebar-title"'
+        f' style="margin-top:12px">ソースで絞り込む</div>\n'
+        f'      <div class="source-checks">\n'
+        f"        {sources_checks_html}\n"
         f"      </div>"
     )
 
@@ -379,12 +453,14 @@ def render_html(
             url_esc = _html.escape(article.url)
             title_esc = _html.escape(article.title)
             src_esc = _html.escape(article.source)
+            sum_esc = _html.escape(summary)
             pub_date = article.published.strftime("%Y-%m-%d")
             pub_month = article.published.strftime("%Y-%m")
             dl_esc = _html.escape(data_labels_json)
             card_parts.append(
                 f'    <article class="card" data-labels="{dl_esc}"'
-                f' data-month="{pub_month}">\n'
+                f' data-month="{pub_month}" data-source="{src_esc}"'
+                f' data-title="{title_esc}" data-summary="{sum_esc}">\n'
                 f'      <div class="card-title">'
                 f'<a href="{url_esc}" target="_blank" rel="noopener">'
                 f"{title_esc}</a></div>\n"
@@ -448,12 +524,14 @@ def _build_cards_html(articles: list[Article], summaries: dict[str, str]) -> str
         url_esc = _html.escape(article.url)
         title_esc = _html.escape(article.title)
         src_esc = _html.escape(article.source)
+        sum_esc = _html.escape(summary)
         pub_date = article.published.strftime("%Y-%m-%d")
         pub_month = article.published.strftime("%Y-%m")
         dl_esc = _html.escape(data_labels_json)
         card_parts.append(
             f'    <article class="card" data-labels="{dl_esc}"'
-            f' data-month="{pub_month}">\n'
+            f' data-month="{pub_month}" data-source="{src_esc}"'
+            f' data-title="{title_esc}" data-summary="{sum_esc}">\n'
             f'      <div class="card-title">'
             f'<a href="{url_esc}" target="_blank" rel="noopener">'
             f"{title_esc}</a></div>\n"
@@ -492,24 +570,56 @@ def _build_sidebar_html(articles: list[Article], count_id: str) -> str:
     unknown_present = sorted(all_present - set(known_order))
     present_labels = known_present + unknown_present
 
+    label_counts: dict[str, int] = {}
+    for _a in articles:
+        for _lb in _a.labels:
+            label_counts[_lb] = label_counts.get(_lb, 0) + 1
+
+    source_counts: dict[str, int] = {}
+    for _a in articles:
+        source_counts[_a.source] = source_counts.get(_a.source, 0) + 1
+    sources_sorted = sorted(source_counts.items(), key=lambda x: -x[1])
+
     clear_btn = '<button class="sidebar-clear panel-clear">チェックをクリア</button>'
     check_items = []
     for lb in present_labels:
         esc = _html.escape(lb)
         bg, fg = _label_colors(lb)
+        cnt = label_counts.get(lb, 0)
         check_items.append(
             f'<label class="label-check">'
             f'<input type="checkbox" value="{esc}">'
             f'<span class="label-chip" style="background:{bg};color:{fg}">{esc}</span>'
+            f'<span class="label-count">{cnt}</span>'
             f"</label>"
         )
     checks_html = "\n        ".join(check_items)
+
+    source_items = []
+    for _src, _cnt in sources_sorted:
+        _src_esc = _html.escape(_src)
+        source_items.append(
+            f'<label class="source-check">'
+            f'<input type="checkbox" value="{_src_esc}">'
+            f'<span class="source-name" title="{_src_esc}">{_src_esc}</span>'
+            f'<span class="label-count">{_cnt}</span>'
+            f"</label>"
+        )
+    sources_checks_html = "\n        ".join(source_items)
+
     return (
-        f"{month_html}\n"
+        f'<input type="search" class="search-input"'
+        f' placeholder="タイトル・要約を検索…">\n'
+        f"      {month_html}\n"
         f"      {clear_btn}\n"
         f'      <div class="sidebar-title">ラベルで絞り込む</div>\n'
         f'      <div class="label-checks">\n'
         f"        {checks_html}\n"
+        f"      </div>\n"
+        f'      <div class="sidebar-title"'
+        f' style="margin-top:12px">ソースで絞り込む</div>\n'
+        f'      <div class="source-checks">\n'
+        f"        {sources_checks_html}\n"
         f"      </div>\n"
         f'      <div class="result-count" id="{count_id}"></div>'
     )
@@ -590,6 +700,20 @@ def render_html_multi_profile(
         padding: 60px 0; font-size: 1rem; }
     footer { text-align: center; font-size: 0.78rem;
         color: #aab0c8; padding: 24px 0 36px; }
+    .search-input { width: 100%; padding: 6px 10px; border: 1px solid #d0d4e8;
+        border-radius: 7px; font-size: 0.83rem; font-family: inherit;
+        margin-bottom: 12px; outline: none; color: #1a1d2e; }
+    .search-input:focus { border-color: #2563eb; }
+    .label-count { margin-left: auto; font-size: 0.72rem;
+        color: #aab0c8; font-weight: 500; }
+    .source-checks { display: flex; flex-direction: column; gap: 4px; }
+    .source-check { display: flex; align-items: center; gap: 7px; cursor: pointer;
+        padding: 3px 4px; border-radius: 6px; transition: background 0.12s; }
+    .source-check:hover { background: #f0f2f8; }
+    .source-check input[type=checkbox] { width: 14px; height: 14px; flex-shrink: 0;
+        cursor: pointer; accent-color: #2563eb; }
+    .source-name { font-size: 0.78rem; color: #3a3f55; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; max-width: 118px; }
     """
 
     # タブバー
@@ -630,19 +754,32 @@ def render_html_multi_profile(
       function applyFilter(panel) {
         var checkboxes = panel.querySelectorAll(
           '.label-check input[type=checkbox]');
+        var sourceCheckboxes = panel.querySelectorAll(
+          '.source-check input[type=checkbox]');
         var cards = panel.querySelectorAll('.card');
         var countEl = panel.querySelector('.result-count');
         var activeMonthBtn = panel.querySelector('.month-btn.active');
         var activeMonth = activeMonthBtn ? activeMonthBtn.dataset.month : '';
+        var searchInput = panel.querySelector('.search-input');
+        var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
         var selected = [];
         checkboxes.forEach(function(cb){ if(cb.checked) selected.push(cb.value); });
+        var selectedSources = [];
+        sourceCheckboxes.forEach(function(cb){
+          if(cb.checked) selectedSources.push(cb.value);
+        });
         var visible = 0;
         cards.forEach(function(card){
           var monthMatch = !activeMonth || card.dataset.month === activeMonth;
           var lbls = card.dataset.labels ? JSON.parse(card.dataset.labels) : [];
           var labelMatch = selected.length === 0 ||
             selected.every(function(s){ return lbls.indexOf(s) !== -1; });
-          var show = monthMatch && labelMatch;
+          var sourceMatch = selectedSources.length === 0 ||
+            selectedSources.indexOf(card.dataset.source) !== -1;
+          var textMatch = !query ||
+            (card.dataset.title || '').toLowerCase().indexOf(query) !== -1 ||
+            (card.dataset.summary || '').toLowerCase().indexOf(query) !== -1;
+          var show = monthMatch && labelMatch && sourceMatch && textMatch;
           card.style.display = show ? '' : 'none';
           if(show) visible++;
         });
@@ -654,11 +791,21 @@ def render_html_multi_profile(
           .forEach(function(cb){
           cb.addEventListener('change', function(){ applyFilter(panel); });
         });
+        panel.querySelectorAll('.source-check input[type=checkbox]')
+          .forEach(function(cb){
+          cb.addEventListener('change', function(){ applyFilter(panel); });
+        });
+        var si = panel.querySelector('.search-input');
+        if(si) si.addEventListener('input', function(){ applyFilter(panel); });
         var clearBtn = panel.querySelector('.panel-clear');
         if(clearBtn){
           clearBtn.addEventListener('click', function(){
             panel.querySelectorAll('.label-check input[type=checkbox]')
                  .forEach(function(cb){ cb.checked = false; });
+            panel.querySelectorAll('.source-check input[type=checkbox]')
+                 .forEach(function(cb){ cb.checked = false; });
+            var si2 = panel.querySelector('.search-input');
+            if(si2) si2.value = '';
             applyFilter(panel);
           });
         }
