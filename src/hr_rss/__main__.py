@@ -15,7 +15,7 @@ from rich.progress import (
     TextColumn,
 )
 
-from hr_rss.config import Config
+from hr_rss.config import Config, _find_config_dir
 from hr_rss.db import ArticleDB, get_db_path
 from hr_rss.fetcher import Article, fetch_feed, fetch_github_issues
 from hr_rss.filter import is_excluded
@@ -334,7 +334,7 @@ def run_cmd(
 
     if all_profiles or not profile:
         # --- 全プロファイル実行モード（デフォルト）---
-        base_config_dir = Config()._dir
+        base_config_dir = _find_config_dir()
         profiles_dir = base_config_dir / "profiles"
         if not profiles_dir.exists():
             raise click.ClickException(
