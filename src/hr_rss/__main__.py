@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,6 +42,22 @@ _PRICING: dict[str, tuple[float, float]] = {
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-opus-4-6": (15.00, 75.00),
 }
+
+
+def _open_browser(path: Path) -> None:
+    """HTMLファイルをブラウザで開く。WSL環境では explorer.exe を使う。"""
+    try:
+        proc_version = Path("/proc/version")
+        if proc_version.exists() and "microsoft" in proc_version.read_text().lower():
+            wslpath_cmd = ["wslpath", "-w", str(path.resolve())]  # noqa: S607
+            win_path = subprocess.check_output(wslpath_cmd, text=True).strip()  # noqa: S603
+            explorer_cmd = ["explorer.exe", win_path]  # noqa: S607
+            subprocess.Popen(explorer_cmd)  # noqa: S603
+        else:
+            webbrowser.open(path.resolve().as_uri())
+    except Exception:
+        resolved = path.resolve()
+        click.echo(f"  ブラウザを開けませんでした。手動で開いてください: {resolved}")
 
 
 def _validate_env() -> None:
@@ -285,7 +302,7 @@ def run_cmd(
     )
 
     if open_browser:
-        webbrowser.open(html_path.resolve().as_uri())
+        _open_browser(html_path)
 
 
 @cli.command("report")
@@ -369,7 +386,7 @@ def report(
     logger.success(f"Written to {html_path}")
 
     if open_browser:
-        webbrowser.open(html_path.resolve().as_uri())
+        _open_browser(html_path)
 
 
 def _print_summary(
