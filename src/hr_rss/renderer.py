@@ -105,37 +105,73 @@ def render_html(
         color: #fff;
         padding: 28px 24px 20px;
     }
-    .header-inner { max-width: 860px; margin: 0 auto; }
+    .header-inner { max-width: 1100px; margin: 0 auto; }
     header h1 { font-size: 1.45rem; font-weight: 700; letter-spacing: 0.02em; }
     .header-meta {
         margin-top: 6px;
         font-size: 0.88rem;
         color: #aab0c8;
     }
-    .filter-bar {
+    .layout {
+        max-width: 1100px;
+        margin: 0 auto;
         display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 16px;
+        gap: 24px;
+        padding: 24px 16px;
+        align-items: flex-start;
     }
-    .filter-btn {
+    .sidebar {
+        width: 200px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 24px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        padding: 16px;
+    }
+    .sidebar-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #7a7f99;
+        margin-bottom: 10px;
+        letter-spacing: 0.05em;
+    }
+    .sidebar-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
         border: none;
         cursor: pointer;
-        padding: 4px 14px;
-        border-radius: 999px;
-        font-size: 0.78rem;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 0.82rem;
         font-weight: 600;
-        background: rgba(255,255,255,0.12);
-        color: #e0e4f0;
+        background: transparent;
+        color: #3a3f55;
         transition: background 0.15s, color 0.15s;
         font-family: inherit;
+        margin-bottom: 2px;
     }
-    .filter-btn:hover { background: rgba(255,255,255,0.22); }
-    .filter-btn.active { background: #fff; color: #1a1d2e; }
+    .sidebar-btn:hover { background: #f0f2f8; }
+    .sidebar-clear {
+        color: #7a7f99;
+        border-bottom: 1px solid #e8eaf0;
+        padding-bottom: 10px;
+        margin-bottom: 6px;
+    }
+    .sidebar-clear.active { background: #f0f2f8; color: #1a1d2e; }
+    .result-count {
+        margin-top: 12px;
+        font-size: 0.78rem;
+        color: #aab0c8;
+        border-top: 1px solid #e8eaf0;
+        padding-top: 8px;
+    }
     main {
-        max-width: 860px;
-        margin: 28px auto;
-        padding: 0 16px;
+        flex: 1;
+        min-width: 0;
+        padding-bottom: 36px;
     }
     .card {
         background: #fff;
@@ -182,28 +218,65 @@ def render_html(
 
     js = """
     (function(){
-      var buttons = document.querySelectorAll('.filter-btn');
+      var buttons = document.querySelectorAll('.sidebar-btn');
       var cards = document.querySelectorAll('.card');
+      var clearBtn = document.querySelector('.sidebar-clear');
+      var countEl = document.getElementById('result-count');
+      var selected = new Set();
+
+      function updateCount() {
+        var visible = 0;
+        cards.forEach(function(c){ if(c.style.display !== 'none') visible++; });
+        if(countEl) countEl.textContent = visible + '件表示 / 全' + cards.length + '件';
+      }
+
+      function applyFilter() {
+        if(clearBtn) {
+          if(selected.size === 0) clearBtn.classList.add('active');
+          else clearBtn.classList.remove('active');
+        }
+        buttons.forEach(function(btn){
+          var lbl = btn.dataset.label;
+          if(lbl === 'all') return;
+          if(selected.has(lbl)){
+            btn.style.background = btn.dataset.bg || '';
+            btn.style.color = btn.dataset.fg || '';
+          } else {
+            btn.style.background = '';
+            btn.style.color = '';
+          }
+        });
+        cards.forEach(function(card){
+          if(selected.size === 0){
+            card.style.display = '';
+          } else {
+            var lbls = card.dataset.labels ? JSON.parse(card.dataset.labels) : [];
+            var match = lbls.some(function(l){ return selected.has(l); });
+            card.style.display = match ? '' : 'none';
+          }
+        });
+        updateCount();
+      }
+
       buttons.forEach(function(btn){
         btn.addEventListener('click', function(){
-          buttons.forEach(function(b){ b.classList.remove('active'); });
-          btn.classList.add('active');
-          var label = btn.dataset.label;
-          cards.forEach(function(card){
-            if(label === 'all'){
-              card.style.display = '';
-            } else {
-              var labels = card.dataset.labels ? JSON.parse(card.dataset.labels) : [];
-              card.style.display = labels.indexOf(label) >= 0 ? '' : 'none';
-            }
-          });
+          var lbl = btn.dataset.label;
+          if(lbl === 'all'){
+            selected.clear();
+          } else {
+            if(selected.has(lbl)) selected.delete(lbl);
+            else selected.add(lbl);
+          }
+          applyFilter();
         });
       });
-      if(buttons.length) buttons[0].classList.add('active');
+
+      if(clearBtn) clearBtn.classList.add('active');
+      updateCount();
     })();
     """
 
-    # フィルターボタン：実際に登場するラベルのみ
+    # サイドバーボタン：実際に登場するラベルのみ
     # 既知ラベルは_LABEL_COLORSの定義順、未知ラベルはその後ろにアルファベット順で追加
     known_order = list(_LABEL_COLORS.keys())
     all_present: set[str] = {lb for a in articles for lb in a.labels}
@@ -211,13 +284,19 @@ def render_html(
     unknown_present = sorted(all_present - set(known_order))
     present_labels = known_present + unknown_present
 
-    filter_btns = ['<button class="filter-btn" data-label="all">すべて</button>']
+    clear_btn = (
+        '<button class="sidebar-btn sidebar-clear" data-label="all">'
+        "すべてクリア</button>"
+    )
+    sidebar_btns = [clear_btn]
     for lb in present_labels:
         esc = _html.escape(lb)
-        filter_btns.append(
-            f'<button class="filter-btn" data-label="{esc}">{esc}</button>'
+        bg, fg = _label_colors(lb)
+        sidebar_btns.append(
+            f'<button class="sidebar-btn" data-label="{esc}"'
+            f' data-bg="{bg}" data-fg="{fg}">{esc}</button>'
         )
-    filter_bar_html = "\n        ".join(filter_btns)
+    sidebar_html = "\n        ".join(sidebar_btns)
 
     # 記事カード
     if not articles:
@@ -269,14 +348,18 @@ def render_html(
         f"      <h1>HR Tech 技術記事まとめ</h1>\n"
         f'      <p class="header-meta">'
         f"生成日: {now}&emsp;|&emsp;{header_label}&emsp;|&emsp;{count} 件</p>\n"
-        f'      <div class="filter-bar">\n'
-        f"        {filter_bar_html}\n"
-        f"      </div>\n"
         f"    </div>\n"
         f"  </header>\n"
-        f"  <main>\n"
+        f'  <div class="layout">\n'
+        f'    <aside class="sidebar">\n'
+        f'      <div class="sidebar-title">ラベルで絞り込む</div>\n'
+        f"      {sidebar_html}\n"
+        f'      <div class="result-count" id="result-count"></div>\n'
+        f"    </aside>\n"
+        f"    <main>\n"
         f"{cards_html}\n"
-        f"  </main>\n"
+        f"    </main>\n"
+        f"  </div>\n"
         f"  <footer>HR RSS &mdash; Generated {now}</footer>\n"
         f"  <script>{js}</script>\n"
         f"</body>\n"
