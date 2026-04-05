@@ -32,9 +32,8 @@ uv sync
 uv run hr-rss setup
 ```
 
-対話形式で以下を自動セットアップします：
-- Anthropic API キーの入力 → `.env` ファイルを作成
-- 設定ファイル（フィード一覧・除外キーワードなど）の初期化
+対話形式で Anthropic API キーを入力し、`.env` ファイルを作成します。
+設定ファイル（フィード・プロンプト等）はプロファイルとして `config/profiles/` に同梱済みです。
 
 APIキーは [console.anthropic.com](https://console.anthropic.com) で発行できます。
 
@@ -56,23 +55,28 @@ APIキーは [console.anthropic.com](https://console.anthropic.com) で発行で
 #### `run` — 記事を収集してDBに蓄積
 
 ```bash
-# 過去7日分の記事を収集してDBに保存（デフォルト）
+# 全プロファイルを実行（デフォルト）→ タブ切り替えHTMLを出力
 uv run hr-rss run
 
 # 過去14日分
 uv run hr-rss run --days 14
+
+# 特定のプロファイルのみ実行
+uv run hr-rss run --profile hr_datascience
 ```
 
-実行が完了すると `output/` ディレクトリに `.md` と `.html` の2ファイルが生成され、ブラウザが自動的に開きます。
-収集した記事は `output/hr_rss.db`（SQLite）に蓄積されます。同じURLの記事は重複してLLM処理されません。
+実行が完了すると `output/` ディレクトリにHTMLファイルが生成され、ブラウザが自動的に開きます。
+収集した記事は `output/hr_rss_<profile>.db`（SQLite）に蓄積されます。同じURLの記事は重複してLLM処理されません。
 
-**出力内容について**: HTMLにはDBに蓄積された要約済み記事が全件表示されます。サイドバーの「月で絞り込む」ボタンで YYYY/MM 単位に絞り込めます。
+**プロファイルについて**: `config/profiles/` 以下に複数のプロファイルを用意できます。デフォルトでは全プロファイルを並行実行し、タブで切り替えられる統合HTMLを出力します。
 
 | オプション | デフォルト | 説明 |
 |---|---|---|
 | `--days N` | `7` | 過去N日間の記事を対象にする |
-| `--output PATH` | `output/output_YYYYMMDD.md` | 出力ファイルのパス（`.html` も同時生成） |
-| `--db PATH` | `output/hr_rss.db` | DBファイルのパス |
+| `--profile NAME` | なし（全プロファイル実行） | 実行するプロファイル名 |
+| `--all-profiles` | — | 全プロファイルを明示的に実行（デフォルト動作と同じ） |
+| `--output PATH` | `output/output_YYYYMMDD_all.html` | 出力ファイルのパス |
+| `--db PATH` | `output/hr_rss_<profile>.db` | DBファイルのパス |
 | `--no-db` | `false` | DB永続化をスキップして従来通りに動作する |
 | `--open / --no-open` | `ON` | 生成後にブラウザで自動オープン |
 

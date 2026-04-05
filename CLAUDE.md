@@ -16,7 +16,8 @@ HR業界各社のテックブログ・GitHubリポジトリを巡回し、技術
 ## ディレクトリ構成
 
 - `src/hr_rss/` — アプリケーションコード
-- `config/` — 設定ファイル（`feeds.yaml`, `exclude_keywords.yaml`）
+- `config/profiles/` — プロファイル別設定（`hr_datascience/`, `market_research/`, `competitive_ai/`）
+  - 各プロファイルに `feeds.yaml`, `exclude_keywords.yaml`, `labels.yaml`, `prompts.yaml` を配置
 - `scripts/` — 運用補助スクリプト（`check_feeds.py` など）
 - `tests/` — テストコード
 - `docs/` — ドキュメント
@@ -32,7 +33,7 @@ HR業界各社のテックブログ・GitHubリポジトリを巡回し、技術
 
 ## feeds.yaml の feed タイプ
 
-`config/feeds.yaml` の各エントリには `type` フィールドを指定できる（省略時は `rss`）。
+`config/profiles/<profile_name>/feeds.yaml` の各エントリには `type` フィールドを指定できる（省略時は `rss`）。
 
 ```yaml
 - url: https://example.com/feed       # type省略 → RSSとして処理

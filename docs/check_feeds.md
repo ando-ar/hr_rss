@@ -19,6 +19,14 @@ uv run python scripts/check_feeds.py --no-verbose
 | `--timeout FLOAT` | `15.0` | 1フィードあたりのタイムアウト（秒） |
 | `--workers INT` | `10` | 並列スレッド数 |
 | `--verbose / --no-verbose` | verbose | 全結果表示 / NG・bozo警告のみ表示 |
+| `--profile NAME` | なし | チェックするプロファイル名（`config/profiles/<name>/`） |
+
+プロファイルを省略すると `config/feeds.yaml`（存在する場合）を読みます。プロファイルを使っている場合は必ず `--profile` を指定してください。
+
+```bash
+# hr_datascience プロファイルのフィードを確認
+uv run python scripts/check_feeds.py --profile hr_datascience --no-verbose
+```
 
 ## 出力の見方
 

@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 import webbrowser
 from datetime import UTC, datetime
@@ -110,24 +109,23 @@ def setup_cmd() -> None:
         env_path.write_text(f"ANTHROPIC_API_KEY={api_key}\n", encoding="utf-8")
         click.echo(f"✓ .env を作成しました: {env_path}")
 
-    # 設定ファイルのコピー
+    # プロファイル確認
     click.echo("")
-    config_dir = project_root / "config"
-    for name in ["feeds.yaml", "exclude_keywords.yaml", "labels.yaml", "prompts.yaml"]:
-        target = config_dir / name
-        sample = config_dir / name.replace(".yaml", ".sample.yaml")
-        if target.exists():
-            click.echo(f"✓ config/{name} は既に存在します")
-        elif sample.exists():
-            shutil.copy(sample, target)
-            click.echo(f"✓ config/{name} を作成しました（サンプルからコピー）")
+    profiles_dir = project_root / "config" / "profiles"
+    if profiles_dir.exists():
+        profiles = sorted(d.name for d in profiles_dir.iterdir() if d.is_dir())
+        if profiles:
+            names = ", ".join(profiles)
+            click.echo(f"✓ プロファイルが {len(profiles)} 件見つかりました: {names}")
         else:
-            click.echo(f"  config/{name}.sample.yaml が見つかりません（スキップ）")
+            click.echo("  config/profiles/ にプロファイルがありません。")
+    else:
+        click.echo("  config/profiles/ ディレクトリが見つかりません。")
 
     click.echo("")
     click.echo("━" * 50)
     click.echo(" セットアップ完了！以下のコマンドで実行できます：")
-    click.echo("   uv run python -m hr_rss run")
+    click.echo("   uv run hr-rss run")
     click.echo("━" * 50)
     click.echo("")
 
