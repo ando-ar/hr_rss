@@ -137,30 +137,49 @@ def render_html(
         margin-bottom: 10px;
         letter-spacing: 0.05em;
     }
-    .sidebar-btn {
+    .sidebar-clear {
         display: block;
         width: 100%;
         text-align: left;
         border: none;
         cursor: pointer;
-        padding: 6px 10px;
+        padding: 5px 8px;
         border-radius: 6px;
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         font-weight: 600;
         background: transparent;
-        color: #3a3f55;
-        transition: background 0.15s, color 0.15s;
-        font-family: inherit;
-        margin-bottom: 2px;
-    }
-    .sidebar-btn:hover { background: #f0f2f8; }
-    .sidebar-clear {
         color: #7a7f99;
+        font-family: inherit;
+        margin-bottom: 8px;
         border-bottom: 1px solid #e8eaf0;
         padding-bottom: 10px;
-        margin-bottom: 6px;
     }
-    .sidebar-clear.active { background: #f0f2f8; color: #1a1d2e; }
+    .sidebar-clear:hover { color: #1a1d2e; }
+    .label-checks { display: flex; flex-direction: column; gap: 4px; }
+    .label-check {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        cursor: pointer;
+        padding: 3px 4px;
+        border-radius: 6px;
+        transition: background 0.12s;
+    }
+    .label-check:hover { background: #f0f2f8; }
+    .label-check input[type=checkbox] {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        cursor: pointer;
+        accent-color: #2563eb;
+    }
+    .label-chip {
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
     .result-count {
         margin-top: 12px;
         font-size: 0.78rem;
@@ -218,11 +237,16 @@ def render_html(
 
     js = """
     (function(){
-      var buttons = document.querySelectorAll('.sidebar-btn');
+      var checkboxes = document.querySelectorAll('.label-check input[type=checkbox]');
       var cards = document.querySelectorAll('.card');
-      var clearBtn = document.querySelector('.sidebar-clear');
+      var clearBtn = document.getElementById('clear-all');
       var countEl = document.getElementById('result-count');
-      var selected = new Set();
+
+      function getSelected() {
+        var sel = [];
+        checkboxes.forEach(function(cb){ if(cb.checked) sel.push(cb.value); });
+        return sel;
+      }
 
       function updateCount() {
         var visible = 0;
@@ -231,47 +255,30 @@ def render_html(
       }
 
       function applyFilter() {
-        if(clearBtn) {
-          if(selected.size === 0) clearBtn.classList.add('active');
-          else clearBtn.classList.remove('active');
-        }
-        buttons.forEach(function(btn){
-          var lbl = btn.dataset.label;
-          if(lbl === 'all') return;
-          if(selected.has(lbl)){
-            btn.style.background = btn.dataset.bg || '';
-            btn.style.color = btn.dataset.fg || '';
-          } else {
-            btn.style.background = '';
-            btn.style.color = '';
-          }
-        });
+        var selected = getSelected();
         cards.forEach(function(card){
-          if(selected.size === 0){
+          if(selected.length === 0){
             card.style.display = '';
           } else {
             var lbls = card.dataset.labels ? JSON.parse(card.dataset.labels) : [];
-            var match = lbls.some(function(l){ return selected.has(l); });
+            var match = selected.every(function(s){ return lbls.indexOf(s) !== -1; });
             card.style.display = match ? '' : 'none';
           }
         });
         updateCount();
       }
 
-      buttons.forEach(function(btn){
-        btn.addEventListener('click', function(){
-          var lbl = btn.dataset.label;
-          if(lbl === 'all'){
-            selected.clear();
-          } else {
-            if(selected.has(lbl)) selected.delete(lbl);
-            else selected.add(lbl);
-          }
-          applyFilter();
-        });
+      checkboxes.forEach(function(cb){
+        cb.addEventListener('change', applyFilter);
       });
 
-      if(clearBtn) clearBtn.classList.add('active');
+      if(clearBtn){
+        clearBtn.addEventListener('click', function(){
+          checkboxes.forEach(function(cb){ cb.checked = false; });
+          applyFilter();
+        });
+      }
+
       updateCount();
     })();
     """
@@ -284,19 +291,24 @@ def render_html(
     unknown_present = sorted(all_present - set(known_order))
     present_labels = known_present + unknown_present
 
-    clear_btn = (
-        '<button class="sidebar-btn sidebar-clear" data-label="all">'
-        "すべてクリア</button>"
-    )
-    sidebar_btns = [clear_btn]
+    clear_btn = '<button class="sidebar-clear" id="clear-all">チェックをクリア</button>'
+    check_items = []
     for lb in present_labels:
         esc = _html.escape(lb)
         bg, fg = _label_colors(lb)
-        sidebar_btns.append(
-            f'<button class="sidebar-btn" data-label="{esc}"'
-            f' data-bg="{bg}" data-fg="{fg}">{esc}</button>'
+        check_items.append(
+            f'<label class="label-check">'
+            f'<input type="checkbox" value="{esc}">'
+            f'<span class="label-chip" style="background:{bg};color:{fg}">{esc}</span>'
+            f"</label>"
         )
-    sidebar_html = "\n        ".join(sidebar_btns)
+    checks_html = "\n        ".join(check_items)
+    sidebar_html = (
+        f"{clear_btn}\n"
+        f'      <div class="label-checks">\n'
+        f"        {checks_html}\n"
+        f"      </div>"
+    )
 
     # 記事カード
     if not articles:

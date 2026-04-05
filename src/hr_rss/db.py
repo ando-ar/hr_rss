@@ -115,11 +115,12 @@ class ArticleDB:
     def get_articles_in_range(
         self, date_from: datetime, date_to: datetime
     ) -> list[Article]:
-        """published が [date_from, date_to] の範囲の処理済み記事を返す。"""
+        """published が [date_from, date_to] の範囲の処理済み・要約あり記事を返す。"""
         cur = self._conn.execute(
             """
             SELECT * FROM articles
             WHERE is_processed = 1
+              AND summary != ''
               AND published >= ?
               AND published <= ?
             ORDER BY published DESC
@@ -136,6 +137,7 @@ class ArticleDB:
             """
             SELECT url, summary FROM articles
             WHERE is_processed = 1
+              AND summary != ''
               AND published >= ?
               AND published <= ?
             """,
