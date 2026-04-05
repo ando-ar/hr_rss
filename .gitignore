@@ -29,8 +29,10 @@ pytest-of-*/
 # VSCode
 .vscode/
 
-# 生成物
-output/
+# 生成物（output/sample/ は公開サンプルとして追跡対象）
+output/*
+!output/sample/
+!output/sample/**
 
 # ユーザーローカルの config オーバーライド（*.sample.yaml をコピーして編集すること）
 config/feeds.yaml
