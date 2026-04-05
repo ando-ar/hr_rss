@@ -334,8 +334,8 @@ def run_cmd(
     date_str = datetime.now(UTC).strftime("%Y%m%d")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    if all_profiles:
-        # --- 全プロファイル実行モード ---
+    if all_profiles or not profile:
+        # --- 全プロファイル実行モード（デフォルト）---
         base_config_dir = Config()._dir
         profiles_dir = base_config_dir / "profiles"
         if not profiles_dir.exists():
@@ -378,7 +378,7 @@ def run_cmd(
             _open_browser(html_path)
         return
 
-    # --- 単一プロファイル or デフォルト実行モード ---
+    # --- 単一プロファイル実行モード（--profile 指定時）---
     reset_stats()
     config = Config(profile=profile)
     output_articles, output_summaries, n_fetched, n_filter, n_classified = (

@@ -1,0 +1,34 @@
+exclude_keywords:
+  # 純粋な技術実装・開発記事（市場リサーチには不要）
+  # 日本語
+  - チュートリアル
+  - ハンズオン
+  - 実装してみた
+  - やってみた
+  - 入門
+  - コードリーディング
+  - デプロイ
+  # English
+  - tutorial
+  - how to implement
+  - step by step
+  - getting started
+  - hands-on
+  - code walkthrough
+
+  # 純粋なイベント告知（告知のみで内容がないもの）
+  # 日本語
+  - 勉強会
+  - ミートアップ
+  # English
+  - meetup
+  - webinar
+
+  # 求人・採用（個社の採用活動は市場動向ではない）
+  # 日本語
+  - 求人
+  - インターン
+  - エンジニア募集
+  # English
+  - "we're hiring"
+  - job opening

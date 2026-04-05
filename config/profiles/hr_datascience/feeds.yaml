@@ -1,0 +1,71 @@
+feeds:
+  # ---- 日本 ----
+  - url: https://tech.smarthr.jp/feed
+    name: SmartHR Tech Blog
+
+  - url: https://developers.freee.co.jp/feed
+    name: freee Developers Blog
+
+  - url: https://buildersbox.corp-sansan.com/feed
+    name: Sansan Builders Box
+
+  - url: https://blog.recruit.co.jp/rtc/feed/
+    name: Recruit Tech Blog
+
+  - url: https://engineering.indeedblog.com/feed/
+    name: Indeed Engineering Blog
+
+  - url: https://engineering.visional.inc/index.xml
+    name: Visional Engineering Blog (BizReach / HRMOS)
+
+  - url: https://times.hrbrain.co.jp/feed
+    name: HRBrain Blog
+
+  - url: https://moneyforward-dev.jp/feed
+    name: Money Forward Developers Blog
+
+  - url: https://engineer.wantedly.com/feed
+    name: Wantedly Engineer Blog
+
+  - url: https://github.com/wantedly/machine-learning-round-table
+    name: Wantedly ML Round Table (GitHub Issues)
+    type: github_issues
+
+  # ---- グローバル ----
+  - url: https://engineering.linkedin.com/blog.rss
+    name: LinkedIn Engineering Blog
+
+  - url: https://engineering.atspotify.com/feed/
+    name: Spotify Engineering
+
+  - url: https://www.lever.co/blog/feed/
+    name: Lever Blog
+
+  - url: https://lattice.com/blog/rss.xml
+    name: Lattice Blog
+
+  # ---- 推薦・検索・ML（グローバル大手）----
+  - url: https://research.google/blog/rss/
+    name: Google Research Blog
+
+  - url: https://developer.nvidia.com/blog/feed/
+    name: NVIDIA Technical Blog
+
+  - url: https://medium.com/feed/netflix-techblog
+    name: Netflix TechBlog
+
+  - url: https://medium.com/feed/pinterest-engineering
+    name: Pinterest Engineering (visual search / rec)
+
+  - url: https://medium.com/feed/airbnb-engineering
+    name: Airbnb Tech Blog (search / rec)
+
+  - url: https://openai.com/blog/rss.xml
+    name: OpenAI Blog
+
+  - url: https://huggingface.co/blog/feed.xml
+    name: Hugging Face Blog
+
+  # ---- HR tech ニュース（技術寄り）----
+  - url: https://www.hrtechoutlook.com/rss-feeds/
+    name: HR Tech Outlook

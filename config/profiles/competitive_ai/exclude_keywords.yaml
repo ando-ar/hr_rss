@@ -1,0 +1,47 @@
+exclude_keywords:
+  # 純粋な技術実装・アルゴリズム解説（プロダクト動向調査には不要）
+  # 日本語
+  - チュートリアル
+  - ハンズオン
+  - 実装してみた
+  - やってみた
+  - 入門
+  - コードリーディング
+  - アルゴリズム解説
+  # English
+  - tutorial
+  - how to implement
+  - step by step
+  - getting started
+  - hands-on
+  - code walkthrough
+
+  # 論文・学術コンテンツ
+  # 日本語
+  - 論文紹介
+  - 論文読み
+  - arxiv
+  # English
+  - paper review
+  - arxiv
+  - research paper
+
+  # 純粋インフラ記事（競合プロダクト調査には直接関係しない）
+  # English
+  - kubernetes
+  - terraform
+  - CI/CD pipeline
+
+  # イベント告知・求人
+  # 日本語
+  - 勉強会
+  - 求人
+  - インターン
+  # English
+  - meetup
+  - webinar
+  - "we're hiring"
+  - job opening
+
+  # 注意: 資金調達・提携・買収・M&Aはここに含めない
+  # → 競合の強化シグナルとして積極的に収集する
