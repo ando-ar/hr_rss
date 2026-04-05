@@ -1,7 +1,7 @@
 import os
 import subprocess
 import webbrowser
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import click
@@ -257,13 +257,14 @@ def _run_single_profile(
                 )
             progress.advance(task)
 
-    # 6. 出力対象
+    # 6. 出力対象（--days 指定の期間に絞る）
     if no_db or db is None:
         output_articles = tech_articles
         output_summaries = summaries
     else:
-        output_articles = db.get_all_processed()
-        output_summaries = db.get_all_summaries()
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        output_articles = db.get_articles_in_range(cutoff, datetime.now(UTC))
+        output_summaries = db.get_summaries_in_range(cutoff, datetime.now(UTC))
         db.close()
 
     return (
