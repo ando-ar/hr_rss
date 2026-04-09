@@ -1,39 +1,4 @@
 feeds:
-  # ---- 国内 HRテック企業 ----
-  - url: https://tech.smarthr.jp/feed
-    name: SmartHR Tech Blog
-
-  - url: https://developers.freee.co.jp/feed
-    name: freee Developers Blog
-
-  - url: https://buildersbox.corp-sansan.com/feed
-    name: Sansan Builders Box
-
-  - url: https://blog.recruit.co.jp/rtc/feed/
-    name: Recruit Tech Blog
-
-  - url: https://engineering.indeedblog.com/feed/
-    name: Indeed Engineering Blog
-
-  - url: https://engineering.visional.inc/index.xml
-    name: Visional Engineering Blog (BizReach / HRMOS)
-
-  - url: https://times.hrbrain.co.jp/feed
-    name: HRBrain Blog
-
-  - url: https://moneyforward-dev.jp/feed
-    name: Money Forward Developers Blog
-
-  - url: https://engineer.wantedly.com/feed
-    name: Wantedly Engineer Blog
-
   # ---- 国内 HR業界メディア ----
   - url: https://hrzine.jp/rss/new/index.xml
     name: HRzine
-
-  # ---- グローバル HRテック企業 ----
-  - url: https://www.lever.co/blog/feed/
-    name: Lever Blog
-
-  - url: https://lattice.com/blog/rss.xml
-    name: Lattice Blog
