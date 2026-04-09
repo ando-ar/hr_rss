@@ -132,7 +132,7 @@ def setup_cmd() -> None:
 
 def _run_single_profile(
     config: Config,
-    days: int,
+    days: int | None,
     no_db: bool,
     db_path: str | None,
 ) -> tuple[list[Article], dict[str, str], int, int, int]:
@@ -164,7 +164,7 @@ def _run_single_profile(
             progress.update(task, description=f"{label_prefix}取得中: {name}")
             feed_type = feed.get("type", "rss")
             fetcher_fn = fetchers.get(feed_type, fetch_feed)
-            articles = fetcher_fn(url, days=days, source=name)
+            articles = fetcher_fn(url, source=name)
             all_articles.extend(articles)
             progress.advance(task)
 
@@ -257,14 +257,18 @@ def _run_single_profile(
                 )
             progress.advance(task)
 
-    # 6. 出力対象（--days 指定の期間に絞る）
+    # 6. 出力対象（days 指定があれば期間絞り込み、なければ全件）
     if no_db or db is None:
         output_articles = tech_articles
         output_summaries = summaries
     else:
-        cutoff = datetime.now(UTC) - timedelta(days=days)
-        output_articles = db.get_articles_in_range(cutoff, datetime.now(UTC))
-        output_summaries = db.get_summaries_in_range(cutoff, datetime.now(UTC))
+        if days is not None:
+            cutoff = datetime.now(UTC) - timedelta(days=days)
+            output_articles = db.get_articles_in_range(cutoff, datetime.now(UTC))
+            output_summaries = db.get_summaries_in_range(cutoff, datetime.now(UTC))
+        else:
+            output_articles = db.get_all_processed()
+            output_summaries = db.get_all_summaries()
         db.close()
 
     return (
@@ -278,7 +282,10 @@ def _run_single_profile(
 
 @cli.command("run")
 @click.option(
-    "--days", default=7, show_default=True, help="何日前までの記事を対象にするか"
+    "--days",
+    default=None,
+    type=int,
+    help="出力対象の日数（省略時: DB 蓄積の全期間）",
 )
 @click.option(
     "--output",
@@ -316,7 +323,7 @@ def _run_single_profile(
     help="config/profiles/ 以下の全プロファイルを実行して統合HTMLを出力",
 )
 def run_cmd(
-    days: int,
+    days: int | None,
     output: str | None,
     db_path: str | None,
     no_db: bool,

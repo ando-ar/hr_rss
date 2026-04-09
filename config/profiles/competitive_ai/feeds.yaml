@@ -2,3 +2,25 @@ feeds:
   # ---- 国内 HR業界メディア ----
   - url: https://hrzine.jp/rss/new/index.xml
     name: HRzine
+
+  - url: https://hrnote.jp/feed
+    name: HR Note
+
+  - url: https://hrog.net/feed
+    name: HRog
+
+  - url: https://jinjibu.jp/rss/?mode=news
+    name: 日本の人事部
+
+  # ---- グローバル HR業界メディア ----
+  - url: https://www.hrdive.com/feeds/news/
+    name: HR Dive
+
+  - url: https://hrexecutive.com/feed/
+    name: HR Executive
+
+  - url: https://joshbersin.com/feed
+    name: Josh Bersin
+
+  - url: https://hrtechfeed.com/feed/
+    name: HR Tech Feed

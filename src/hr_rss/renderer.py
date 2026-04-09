@@ -58,7 +58,9 @@ def render_markdown(
     label: str | None = None,
 ) -> str:
     now = datetime.now(UTC).strftime("%Y-%m-%d")
-    header_label = label if label else f"過去 {days} 日間"
+    header_label = (
+        label if label else (f"過去 {days} 日間" if days is not None else "全期間")
+    )
     lines: list[str] = [
         f"# HR Tech 技術記事まとめ（{header_label}）",
         f"生成日: {now}",
@@ -470,7 +472,9 @@ def render_html(
             )
         cards_html = "\n".join(card_parts)
 
-    header_label = label if label else f"過去 {days} 日間"
+    header_label = (
+        label if label else (f"過去 {days} 日間" if days is not None else "全期間")
+    )
     count = len(articles)
     return (
         f"<!DOCTYPE html>\n"
@@ -636,7 +640,9 @@ def render_html_multi_profile(
 ) -> str:
     """複数プロファイルの記事をタブ付きで表示するHTMLを生成する。"""
     now = datetime.now(UTC).strftime("%Y-%m-%d")
-    header_label = label if label else f"過去 {days} 日間"
+    header_label = (
+        label if label else (f"過去 {days} 日間" if days is not None else "全期間")
+    )
 
     extra_css = """
     .profile-tabs {

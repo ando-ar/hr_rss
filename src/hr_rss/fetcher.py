@@ -1,7 +1,7 @@
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import feedparser
 import httpx
@@ -17,10 +17,6 @@ _GITHUB_API_HEADERS = {
 }
 
 
-def _make_cutoff(days: int) -> datetime:
-    return datetime.now(UTC) - timedelta(days=days)
-
-
 @dataclass
 class Article:
     title: str
@@ -33,9 +29,8 @@ class Article:
 
 
 def fetch_feed(
-    url: str, days: int, source: str = "", timeout: float = _DEFAULT_TIMEOUT
+    url: str, source: str = "", limit: int = 200, timeout: float = _DEFAULT_TIMEOUT
 ) -> list[Article]:
-    cutoff = _make_cutoff(days)
     try:
         response = httpx.get(
             url, timeout=timeout, headers=HTTP_HEADERS, follow_redirects=True
@@ -49,7 +44,7 @@ def fetch_feed(
     articles: list[Article] = []
     for entry in feed.get("entries", []):
         published = _parse_published(entry)
-        if published is None or published < cutoff:
+        if published is None:
             continue
         articles.append(
             Article(
@@ -60,11 +55,12 @@ def fetch_feed(
                 source=source,
             )
         )
-    return articles
+    articles.sort(key=lambda a: a.published, reverse=True)
+    return articles[:limit]
 
 
 def fetch_github_issues(
-    url: str, days: int, source: str = "", timeout: float = _DEFAULT_TIMEOUT
+    url: str, source: str = "", limit: int = 200, timeout: float = _DEFAULT_TIMEOUT
 ) -> list[Article]:
     """GitHub リポジトリの Issues を Article リストとして返す。
 
@@ -78,7 +74,6 @@ def fetch_github_issues(
 
     repo_path = m.group(1)
     api_url = f"https://api.github.com/repos/{repo_path}/issues"
-    cutoff = _make_cutoff(days)
 
     articles: list[Article] = []
     page = 1
@@ -105,9 +100,6 @@ def fetch_github_issues(
                 published = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 continue
-            if published < cutoff:
-                # Issues は新しい順なのでここで打ち切れる
-                return articles
 
             articles.append(
                 Article(
@@ -118,6 +110,8 @@ def fetch_github_issues(
                     source=source,
                 )
             )
+            if len(articles) >= limit:
+                return articles
 
         if len(issues) < 100:
             break

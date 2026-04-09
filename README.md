@@ -47,7 +47,7 @@ APIキーは [console.anthropic.com](https://console.anthropic.com) で発行で
 
 | ファイル | 説明 |
 |---|---|
-| `run.bat` | 過去7日間の記事を収集してDBに蓄積 |
+| `run.bat` | 最新記事を収集してDBに蓄積 |
 | `run_report.bat` | 全プロファイル・全期間の記事をDBから再出力 |
 
 ### コマンドラインの場合
@@ -58,7 +58,7 @@ APIキーは [console.anthropic.com](https://console.anthropic.com) で発行で
 # 全プロファイルを実行（デフォルト）→ タブ切り替えHTMLを出力
 uv run hr-rss run
 
-# 過去14日分
+# 直近14日分のみ出力したい場合
 uv run hr-rss run --days 14
 
 # 特定のプロファイルのみ実行
@@ -72,7 +72,7 @@ uv run hr-rss run --profile hr_datascience
 
 | オプション | デフォルト | 説明 |
 |---|---|---|
-| `--days N` | `7` | 過去N日間の記事を対象にする |
+| `--days N` | なし（全期間） | 出力を直近N日間に絞る |
 | `--profile NAME` | なし（全プロファイル実行） | 実行するプロファイル名 |
 | `--all-profiles` | — | 全プロファイルを明示的に実行（デフォルト動作と同じ） |
 | `--output PATH` | `output/output.html` | 出力ファイルのパス |
@@ -108,7 +108,7 @@ uv run hr-rss report --from 2026-03-01 --to 2026-03-31
 
 `run` コマンド（当日実行分）:
 ```markdown
-# HR Tech 技術記事まとめ（過去 7 日間）
+# HR Tech 技術記事まとめ（全期間）
 生成日: 2026-04-05
 
 ## [LLMを活用した採用スクリーニングの仕組み](https://tech.smarthr.jp/entry/...)

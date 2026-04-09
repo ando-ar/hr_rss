@@ -22,7 +22,7 @@ def _mock_http(entries: list[dict], mock_get: MagicMock, mock_parse: MagicMock) 
     mock_parse.return_value = {"entries": entries, "bozo": False}
 
 
-def test_fetch_feed_returns_articles_within_days():
+def test_fetch_feed_returns_articles():
     now = datetime.now(UTC)
     entries = [_make_entry("新しい記事", "https://example.com/new", now)]
     with (
@@ -30,14 +30,15 @@ def test_fetch_feed_returns_articles_within_days():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http(entries, mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
 
     assert len(result) == 1
     assert result[0].title == "新しい記事"
     assert result[0].url == "https://example.com/new"
 
 
-def test_fetch_feed_excludes_articles_older_than_days():
+def test_fetch_feed_includes_old_articles():
+    """日付フィルタは行わないため、古い記事も取得対象になること"""
     old = datetime(2000, 1, 1, tzinfo=UTC)
     entries = [_make_entry("古い記事", "https://example.com/old", old)]
     with (
@@ -45,9 +46,10 @@ def test_fetch_feed_excludes_articles_older_than_days():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http(entries, mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
 
-    assert result == []
+    assert len(result) == 1
+    assert result[0].title == "古い記事"
 
 
 def test_fetch_feed_returns_article_with_summary():
@@ -60,7 +62,7 @@ def test_fetch_feed_returns_article_with_summary():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http(entries, mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
 
     assert result[0].excerpt == "概要テキスト"
 
@@ -78,7 +80,7 @@ def test_fetch_feed_skips_article_with_invalid_date():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http([invalid_entry], mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
 
     assert result == []
 
@@ -86,7 +88,7 @@ def test_fetch_feed_skips_article_with_invalid_date():
 def test_fetch_feed_returns_empty_on_http_error():
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         mock_get.side_effect = Exception("network error")
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
 
     assert result == []
 
@@ -100,7 +102,7 @@ def test_fetch_feed_uses_custom_timeout():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http(entries, mock_get, mock_parse)
-        fetch_feed("https://example.com/feed", days=7, timeout=10)
+        fetch_feed("https://example.com/feed", timeout=10)
 
     _, kwargs = mock_get.call_args
     assert kwargs.get("timeout") == 10
@@ -110,9 +112,28 @@ def test_fetch_feed_skips_on_http_timeout():
     """タイムアウト例外が発生したフィードは空リストを返すこと"""
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         mock_get.side_effect = Exception("timed out")
-        result = fetch_feed("https://example.com/feed", days=7, timeout=10)
+        result = fetch_feed("https://example.com/feed", timeout=10)
 
     assert result == []
+
+
+def test_fetch_feed_respects_limit():
+    """limit を超える記事は切り捨てられ、新しい順に返ること"""
+    now = datetime.now(UTC)
+    old = datetime(2020, 1, 1, tzinfo=UTC)
+    entries = [
+        _make_entry("新しい記事", "https://example.com/new", now),
+        _make_entry("古い記事", "https://example.com/old", old),
+    ]
+    with (
+        patch("hr_rss.fetcher.httpx.get") as mock_get,
+        patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
+    ):
+        _mock_http(entries, mock_get, mock_parse)
+        result = fetch_feed("https://example.com/feed", limit=1)
+
+    assert len(result) == 1
+    assert result[0].title == "新しい記事"
 
 
 def test_article_dataclass_fields():
@@ -159,7 +180,7 @@ def test_fetch_feed_entry_missing_title_uses_empty_string():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http([entry], mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
     assert len(result) == 1
     assert result[0].title == ""
 
@@ -173,7 +194,7 @@ def test_fetch_feed_entry_missing_link_uses_empty_string():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http([entry], mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
     assert len(result) == 1
     assert result[0].url == ""
 
@@ -190,7 +211,7 @@ def test_fetch_feed_published_parsed_is_none_skips_entry():
         patch("hr_rss.fetcher.feedparser.parse") as mock_parse,
     ):
         _mock_http([entry], mock_get, mock_parse)
-        result = fetch_feed("https://example.com/feed", days=7)
+        result = fetch_feed("https://example.com/feed")
     assert result == []
 
 
@@ -218,42 +239,44 @@ def _make_issue(
     }
 
 
-def test_fetch_github_issues_returns_recent_articles():
+def test_fetch_github_issues_returns_articles():
     now = datetime.now(UTC)
     issues = [_make_issue("Issue 1", "https://github.com/org/repo/issues/1", now)]
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         _mock_github_http(issues, mock_get)
-        result = fetch_github_issues("https://github.com/org/repo", days=7)
+        result = fetch_github_issues("https://github.com/org/repo")
     assert len(result) == 1
     assert result[0].title == "Issue 1"
     assert result[0].url == "https://github.com/org/repo/issues/1"
 
 
-def test_fetch_github_issues_excludes_old_issues():
+def test_fetch_github_issues_includes_old_issues():
+    """日付フィルタは行わないため、古い issue も取得対象になること"""
     old = datetime(2000, 1, 1, tzinfo=UTC)
     issues = [_make_issue("Old Issue", "https://github.com/org/repo/issues/1", old)]
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         _mock_github_http(issues, mock_get)
-        result = fetch_github_issues("https://github.com/org/repo", days=7)
-    assert result == []
+        result = fetch_github_issues("https://github.com/org/repo")
+    assert len(result) == 1
+    assert result[0].title == "Old Issue"
 
 
 def test_fetch_github_issues_invalid_url_returns_empty():
-    result = fetch_github_issues("https://notgithub.com/foo/bar", days=7)
+    result = fetch_github_issues("https://notgithub.com/foo/bar")
     assert result == []
 
 
 def test_fetch_github_issues_returns_empty_on_http_error():
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         mock_get.side_effect = Exception("API error")
-        result = fetch_github_issues("https://github.com/org/repo", days=7)
+        result = fetch_github_issues("https://github.com/org/repo")
     assert result == []
 
 
 def test_fetch_github_issues_stops_when_page_empty():
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         _mock_github_http([], mock_get)
-        result = fetch_github_issues("https://github.com/org/repo", days=7)
+        result = fetch_github_issues("https://github.com/org/repo")
     assert result == []
     assert mock_get.call_count == 1
 
@@ -264,7 +287,7 @@ def test_fetch_github_issues_uses_body_as_excerpt():
     issues = [_make_issue("Issue", url, now, body="本文内容")]
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         _mock_github_http(issues, mock_get)
-        result = fetch_github_issues("https://github.com/org/repo", days=7)
+        result = fetch_github_issues("https://github.com/org/repo")
     assert result[0].excerpt == "本文内容"
 
 
@@ -281,6 +304,19 @@ def test_fetch_github_issues_skips_invalid_created_at():
     ]
     with patch("hr_rss.fetcher.httpx.get") as mock_get:
         _mock_github_http(issues, mock_get)
-        result = fetch_github_issues("https://github.com/org/repo", days=7)
+        result = fetch_github_issues("https://github.com/org/repo")
     assert len(result) == 1
     assert result[0].title == "Good Issue"
+
+
+def test_fetch_github_issues_respects_limit():
+    """limit に達したら pagination を打ち切ること"""
+    now = datetime.now(UTC)
+    issues = [
+        _make_issue(f"Issue {i}", f"https://github.com/org/repo/issues/{i}", now)
+        for i in range(5)
+    ]
+    with patch("hr_rss.fetcher.httpx.get") as mock_get:
+        _mock_github_http(issues, mock_get)
+        result = fetch_github_issues("https://github.com/org/repo", limit=3)
+    assert len(result) == 3
