@@ -48,7 +48,7 @@ def _load_labels(config_dir: Path, base_dir: Path | None = None) -> list[str]:
         path = _resolve_with_fallback(config_dir, base_dir, "labels.yaml")
     else:
         path = _resolve_config_file(config_dir, "labels.yaml")
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data.get("labels", [])
 
@@ -58,7 +58,7 @@ def _load_prompts(config_dir: Path, base_dir: Path | None = None) -> dict[str, s
         path = _resolve_with_fallback(config_dir, base_dir, "prompts.yaml")
     else:
         path = _resolve_config_file(config_dir, "prompts.yaml")
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

@@ -68,12 +68,12 @@ class Config:
         resolved_feeds_path = (
             feeds_path if feeds_path is not None else resolve("feeds.yaml")
         )
-        with resolved_feeds_path.open() as f:
+        with resolved_feeds_path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         self.feeds: list[dict] = (data or {}).get("feeds") or []
 
         exclude_path = resolve("exclude_keywords.yaml")
-        with exclude_path.open() as f:
+        with exclude_path.open(encoding="utf-8") as f:
             kw_data = yaml.safe_load(f)
         self.exclude_keywords: list[str] = kw_data.get("exclude_keywords", [])
 
