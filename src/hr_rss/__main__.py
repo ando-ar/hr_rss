@@ -330,7 +330,6 @@ def run_cmd(
 
     _validate_env()
 
-    date_str = datetime.now(UTC).strftime("%Y%m%d")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     if all_profiles or not profile:
@@ -363,13 +362,12 @@ def run_cmd(
                 n_fetched=n_fetched,
                 n_after_filter=n_filter,
                 n_classified=n_classified,
+                profile_name=pname,
             )
 
         html_content = render_html_multi_profile(profile_results, days=days)
         html_path = (
-            Path(output).with_suffix(".html")
-            if output
-            else OUTPUT_DIR / f"output_{date_str}_all.html"
+            Path(output).with_suffix(".html") if output else OUTPUT_DIR / "output.html"
         )
         html_path.write_text(html_content, encoding="utf-8")
         logger.success(f"Written to {html_path}")
@@ -390,12 +388,9 @@ def run_cmd(
     if output:
         md_path = Path(output)
         html_path = md_path.with_suffix(".html")
-    elif profile:
-        md_path = OUTPUT_DIR / f"output_{date_str}_{profile}.md"
-        html_path = OUTPUT_DIR / f"output_{date_str}_{profile}.html"
     else:
-        md_path = OUTPUT_DIR / f"output_{date_str}.md"
-        html_path = OUTPUT_DIR / f"output_{date_str}.html"
+        md_path = OUTPUT_DIR / "output.md"
+        html_path = OUTPUT_DIR / "output.html"
 
     md_path.write_text(md, encoding="utf-8")
     html_path.write_text(html_content, encoding="utf-8")
@@ -407,14 +402,24 @@ def run_cmd(
         n_fetched=n_fetched,
         n_after_filter=n_filter,
         n_classified=n_classified,
+        profile_name=profile,
     )
 
     if open_browser:
         _open_browser(html_path)
 
 
+def _collect_profile_dbs() -> list[tuple[str, Path]]:
+    """output/ 以下のプロファイルDB一覧を返す: [(profile_name, db_path), ...]"""
+    return [
+        (p.stem[len("hr_rss_") :], p) for p in sorted(OUTPUT_DIR.glob("hr_rss_*.db"))
+    ]
+
+
 @cli.command("report")
-@click.option("--from", "date_from", required=True, help="開始日 YYYY-MM-DD")
+@click.option(
+    "--from", "date_from", default=None, help="開始日 YYYY-MM-DD（省略時は全期間）"
+)
 @click.option(
     "--to",
     "date_to",
@@ -424,13 +429,7 @@ def run_cmd(
 @click.option(
     "--output",
     default=None,
-    help="出力ファイルパス（省略時は output/report_FROM_TO.md）",
-)
-@click.option(
-    "--db",
-    "db_path",
-    default=None,
-    help="DBファイルパス（省略時は output/hr_rss.db）",
+    help="出力ファイルパス（省略時は output/report.html）",
 )
 @click.option(
     "--open/--no-open",
@@ -439,19 +438,23 @@ def run_cmd(
     help="生成後にブラウザで自動オープン（デフォルト: ON）",
 )
 def report(
-    date_from: str,
+    date_from: str | None,
     date_to: str | None,
     output: str | None,
-    db_path: str | None,
     open_browser: bool,
 ) -> None:
-    """過去記事をDBから取得してMarkdown/HTML出力する。"""
-    try:
-        dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=UTC)
-    except ValueError as err:
-        raise click.BadParameter(
-            f"日付フォーマットが不正です: {date_from}（YYYY-MM-DD形式で指定）"
-        ) from err
+    """全プロファイルのDBから記事を取得してHTMLレポートを生成する。"""
+    # --- 日付パース ---
+    dt_from: datetime | None = None
+    dt_to: datetime | None = None
+
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=UTC)
+        except ValueError as err:
+            raise click.BadParameter(
+                f"日付フォーマットが不正です: {date_from}（YYYY-MM-DD形式で指定）"
+            ) from err
 
     if date_to:
         try:
@@ -462,36 +465,47 @@ def report(
             raise click.BadParameter(
                 f"日付フォーマットが不正です: {date_to}（YYYY-MM-DD形式で指定）"
             ) from err
-    else:
+    elif dt_from is not None:
         dt_to = datetime.now(UTC)
         date_to = dt_to.strftime("%Y-%m-%d")
 
-    resolved_db = Path(db_path) if db_path else get_db_path()
-    if not resolved_db.exists():
-        raise click.ClickException(f"DBファイルが見つかりません: {resolved_db}")
+    range_label = f"{date_from} 〜 {date_to}" if dt_from else "全期間"
 
-    with ArticleDB(resolved_db) as db:
-        articles = db.get_articles_in_range(dt_from, dt_to)
-        summaries = db.get_summaries_in_range(dt_from, dt_to)
+    OUTPUT_DIR.mkdir(exist_ok=True)
 
-    range_label = f"{date_from} 〜 {date_to}"
-    md = render_markdown(articles, summaries=summaries, label=range_label)
-    html_content = render_html(articles, summaries=summaries, label=range_label)
+    def _load(path: Path) -> tuple[list, dict]:
+        if not path.exists():
+            raise click.ClickException(f"DBファイルが見つかりません: {path}")
+        with ArticleDB(path) as db:
+            if dt_from is None or dt_to is None:
+                return db.get_all_processed(), db.get_all_summaries()
+            return (
+                db.get_articles_in_range(dt_from, dt_to),
+                db.get_summaries_in_range(dt_from, dt_to),
+            )
 
-    if output:
-        md_path = Path(output)
-        html_path = md_path.with_suffix(".html")
-    else:
-        OUTPUT_DIR.mkdir(exist_ok=True)
-        from_str = date_from.replace("-", "")
-        to_str = date_to.replace("-", "")
-        md_path = OUTPUT_DIR / f"report_{from_str}_{to_str}.md"
-        html_path = OUTPUT_DIR / f"report_{from_str}_{to_str}.html"
+    # 全プロファイルDBを収集してマルチプロファイルHTMLを生成
+    profile_dbs = _collect_profile_dbs()
+    if not profile_dbs:
+        raise click.ClickException(
+            f"プロファイルDBが見つかりません: {OUTPUT_DIR}/hr_rss_*.db\n"
+            "  → まず uv run hr_rss run を実行してDBを作成してください。"
+        )
 
-    md_path.write_text(md, encoding="utf-8")
+    profile_results: list[ProfileResult] = []
+    total = 0
+    for pname, pdb in profile_dbs:
+        articles, summaries = _load(pdb)
+        profile_results.append(ProfileResult(pname, articles, summaries))
+        total += len(articles)
+
+    html_content = render_html_multi_profile(profile_results, label=range_label)
+    html_path = (
+        Path(output).with_suffix(".html") if output else OUTPUT_DIR / "report.html"
+    )
     html_path.write_text(html_content, encoding="utf-8")
-    logger.success(f"Written to {md_path} ({len(articles)} articles)")
-    logger.success(f"Written to {html_path}")
+    n_profiles = len(profile_dbs)
+    logger.success(f"Written to {html_path} ({total} articles, {n_profiles} profiles)")
 
     if open_browser:
         _open_browser(html_path)
@@ -502,6 +516,7 @@ def _print_summary(
     n_fetched: int,
     n_after_filter: int,
     n_classified: int,
+    profile_name: str | None = None,
 ) -> None:
     stats = get_stats()
     total_in = stats["classify_in"] + stats["summarize_in"]
@@ -514,7 +529,8 @@ def _print_summary(
     w = 50
     click.echo("")
     click.echo("━" * w)
-    click.echo(" 実行サマリー")
+    header = f" 実行サマリー [{profile_name}]" if profile_name else " 実行サマリー"
+    click.echo(header)
     click.echo("─" * w)
     click.echo(f"  フィード取得:         {n_feeds} ソース → {n_fetched} 件")
     click.echo(f"  キーワードフィルタ後: {n_after_filter} 件")

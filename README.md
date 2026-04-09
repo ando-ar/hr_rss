@@ -47,8 +47,8 @@ APIキーは [console.anthropic.com](https://console.anthropic.com) で発行で
 
 | ファイル | 説明 |
 |---|---|
-| `run.bat` | 過去7日間の記事を収集 |
-| `run_report.bat` | 指定期間の記事をDBから再出力 |
+| `run.bat` | 過去7日間の記事を収集してDBに蓄積 |
+| `run_report.bat` | 全プロファイル・全期間の記事をDBから再出力 |
 
 ### コマンドラインの場合
 
@@ -65,7 +65,7 @@ uv run hr-rss run --days 14
 uv run hr-rss run --profile hr_datascience
 ```
 
-実行が完了すると `output/` ディレクトリにHTMLファイルが生成され、ブラウザが自動的に開きます。
+実行が完了すると `output/output.html` が生成されブラウザが自動的に開きます。
 収集した記事は `output/hr_rss_<profile>.db`（SQLite）に蓄積されます。同じURLの記事は重複してLLM処理されません。
 
 **プロファイルについて**: `config/profiles/` 以下に複数のプロファイルを用意できます。デフォルトでは全プロファイルを並行実行し、タブで切り替えられる統合HTMLを出力します。
@@ -75,31 +75,31 @@ uv run hr-rss run --profile hr_datascience
 | `--days N` | `7` | 過去N日間の記事を対象にする |
 | `--profile NAME` | なし（全プロファイル実行） | 実行するプロファイル名 |
 | `--all-profiles` | — | 全プロファイルを明示的に実行（デフォルト動作と同じ） |
-| `--output PATH` | `output/output_YYYYMMDD_all.html` | 出力ファイルのパス |
+| `--output PATH` | `output/output.html` | 出力ファイルのパス |
 | `--db PATH` | `output/hr_rss_<profile>.db` | DBファイルのパス |
 | `--no-db` | `false` | DB永続化をスキップして従来通りに動作する |
 | `--open / --no-open` | `ON` | 生成後にブラウザで自動オープン |
 
 ---
 
-#### `report` — 過去記事をDBから出力
+#### `report` — 全プロファイルの記事をDBから出力
 
-`run` で蓄積した記事を任意の日付範囲で再出力します。LLMを呼ばずに即時生成されます。
+`run` で蓄積した全プロファイルのDBを読み込み、タブ付きHTMLを生成します。LLMを呼ばずに即時生成されます。
+`output/hr_rss_*.db` を自動検出するため、引数なしで実行するだけで全期間・全プロファイルのレポートが得られます。
 
 ```bash
-# 2026年3月の記事をまとめて出力
-uv run hr-rss report --from 2026-03-01 --to 2026-03-31
+# 全期間・全プロファイルをまとめて出力（引数不要）
+uv run hr-rss report
 
-# --to を省略すると今日まで
-uv run hr-rss report --from 2026-04-01
+# 期間を絞る場合
+uv run hr-rss report --from 2026-03-01 --to 2026-03-31
 ```
 
 | オプション | デフォルト | 説明 |
 |---|---|---|
-| `--from DATE` | 必須 | 開始日（YYYY-MM-DD形式） |
-| `--to DATE` | 今日 | 終了日（YYYY-MM-DD形式） |
-| `--output PATH` | `output/report_FROM_TO.md` | 出力ファイルのパス（`.html` も同時生成） |
-| `--db PATH` | `output/hr_rss.db` | DBファイルのパス |
+| `--from DATE` | なし（全期間） | 開始日（YYYY-MM-DD形式） |
+| `--to DATE` | 今日 | 終了日（YYYY-MM-DD形式、`--from` 指定時のみ有効） |
+| `--output PATH` | `output/report.html` | 出力ファイルのパス |
 | `--open / --no-open` | `ON` | 生成後にブラウザで自動オープン |
 
 ---
