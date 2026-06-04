@@ -30,6 +30,29 @@ def clear_stats():
     reset_stats()
 
 
+@pytest.fixture(autouse=True)
+def mock_llm_config():
+    """LLMテスト用: config ファイル読み込みをバイパスしてシステムプロンプトをモック。
+
+    classify_article / summarize_and_label はAPIの挙動をテストするものであり、
+    プロファイル設定ファイルの存在に依存すべきでない。
+    """
+    labels = [
+        "生成AI",
+        "機械学習",
+        "MLOps",
+        "データエンジニアリング",
+        "データサイエンス",
+    ]
+    with patch("hr_rss.llm._get_systems") as mock:
+        mock.return_value = (
+            "技術記事か判定し YES/NO で答えよ",
+            "記事を要約しJSONで返せ",
+            labels,
+        )
+        yield mock
+
+
 def test_classify_article_returns_true_for_tech_article():
     with patch("hr_rss.llm._client") as mock_client:
         mock_client.messages.create.return_value = _mock_claude_response("YES")

@@ -172,6 +172,53 @@ def test_get_summaries_in_range_returns_dict(db):
 
 
 # ---------------------------------------------------------------------------
+# reset_processed_in_range
+# ---------------------------------------------------------------------------
+
+
+def test_reset_processed_in_range_returns_count(db):
+    base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
+    db.upsert_articles(
+        [
+            _article(url="https://a.com", published=base),
+            _article(url="https://b.com", published=base - timedelta(days=10)),
+        ]
+    )
+    db.update_processed("https://a.com", summary="要約", labels=[])
+    db.update_processed("https://b.com", summary="要約", labels=[])
+
+    n = db.reset_processed_in_range(base - timedelta(days=1))
+    assert n == 1
+
+
+def test_reset_processed_in_range_makes_articles_unprocessed(db):
+    base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
+    db.upsert_articles([_article(url="https://a.com", published=base)])
+    db.update_processed("https://a.com", summary="要約", labels=[])
+
+    assert len(db.get_unprocessed()) == 0
+    db.reset_processed_in_range(base - timedelta(days=1))
+    assert len(db.get_unprocessed()) == 1
+
+
+def test_reset_processed_in_range_does_not_affect_older_articles(db):
+    base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
+    db.upsert_articles(
+        [
+            _article(url="https://new.com", published=base),
+            _article(url="https://old.com", published=base - timedelta(days=10)),
+        ]
+    )
+    db.update_processed("https://new.com", summary="要約", labels=[])
+    db.update_processed("https://old.com", summary="要約", labels=[])
+
+    db.reset_processed_in_range(base - timedelta(days=5))
+    unprocessed_urls = {a.url for a in db.get_unprocessed()}
+    assert "https://new.com" in unprocessed_urls
+    assert "https://old.com" not in unprocessed_urls
+
+
+# ---------------------------------------------------------------------------
 # コンテキストマネージャー
 # ---------------------------------------------------------------------------
 

@@ -168,3 +168,12 @@ class ArticleDB:
             """
         )
         return {row["url"]: row["summary"] for row in cur.fetchall()}
+
+    def reset_processed_in_range(self, date_from: datetime) -> int:
+        """date_from 以降に公開された記事を未処理状態に戻す。戻り値: リセット件数。"""
+        cur = self._conn.execute(
+            "UPDATE articles SET is_processed = 0 WHERE published >= ?",
+            (date_from.isoformat(),),
+        )
+        self._conn.commit()
+        return cur.rowcount

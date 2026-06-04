@@ -13,7 +13,9 @@ config/profiles/
 
 ---
 
-## プロファイルの実行
+## コマンドリファレンス
+
+### `run` — フィード収集・LLM 分類・HTML 出力
 
 ```bash
 # 全プロファイルを実行（デフォルト）
@@ -21,7 +23,48 @@ uv run hr-rss run
 
 # 特定のプロファイルのみ実行
 uv run hr-rss run --profile hr_datascience
+
+# 直近 7 日分の記事を LLM 再判定してから出力
+uv run hr-rss run --rerun-days 7
+
+# 出力対象を直近 14 日に絞り込む
+uv run hr-rss run --days 14
 ```
+
+| オプション | 説明 |
+|-----------|------|
+| `--profile NAME` | 単一プロファイルを実行（省略時: 全プロファイル） |
+| `--all-profiles` | `config/profiles/` 以下の全プロファイルを明示的に実行 |
+| `--days N` | 出力対象を直近 N 日に絞り込む（省略時: DB 全期間） |
+| `--rerun-days N` | 直近 N 日の記事を LLM 再判定（DB の処理済みフラグをリセット） |
+| `--output PATH` | 出力ファイルパス（省略時: `output/output.html`） |
+| `--db PATH` | DB ファイルパスを指定（省略時: `output/hr_rss_<profile>.db`） |
+| `--no-db` | DB 永続化をスキップして毎回全記事を LLM 処理する |
+| `--no-open` | 生成後のブラウザ自動オープンを無効化 |
+
+---
+
+### `report` — DB から期間指定レポートを生成
+
+```bash
+# 全プロファイルの DB から直近期間のレポートを生成
+uv run hr-rss report --from 2026-05-01 --to 2026-05-31
+
+# 開始日のみ指定（終了日は当日）
+uv run hr-rss report --from 2026-05-01
+
+# 出力先を指定
+uv run hr-rss report --from 2026-05-01 --output output/may_report.html
+```
+
+`report` は `output/hr_rss_*.db` を自動スキャンして全プロファイルを統合し、タブ切り替え HTML を生成します。
+
+| オプション | 説明 |
+|-----------|------|
+| `--from YYYY-MM-DD` | 集計開始日（省略時: 全期間） |
+| `--to YYYY-MM-DD` | 集計終了日（省略時: 当日） |
+| `--output PATH` | 出力ファイルパス（省略時: `output/report.html`） |
+| `--no-open` | 生成後のブラウザ自動オープンを無効化 |
 
 ---
 
@@ -123,3 +166,6 @@ summarize_system: |
 |--------|------|------|
 | `ANTHROPIC_API_KEY` | 必須 | Anthropic APIキー（`sk-ant-...`） |
 | `ANTHROPIC_API_MODEL` | 任意 | 使用するモデル名（デフォルト: `claude-haiku-4-5-20251001`） |
+| `LLM_MAX_CHARS` | 任意 | 要約 LLM に渡す本文の最大文字数（デフォルト: `8000`） |
+
+SOCKS/HTTP プロキシが必要な場合は `ALL_PROXY` / `HTTPS_PROXY` など httpx の標準環境変数が有効です。

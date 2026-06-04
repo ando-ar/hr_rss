@@ -135,6 +135,7 @@ def _run_single_profile(
     days: int | None,
     no_db: bool,
     db_path: str | None,
+    rerun_days: int | None = None,
 ) -> tuple[list[Article], dict[str, str], int, int, int]:
     """1プロファイル分のパイプラインを実行する。
 
@@ -183,6 +184,10 @@ def _run_single_profile(
     else:
         resolved_db = Path(db_path) if db_path else get_db_path(config.profile_name)
         db = ArticleDB(resolved_db)
+        if rerun_days is not None:
+            rerun_cutoff = datetime.now(UTC) - timedelta(days=rerun_days)
+            n_reset = db.reset_processed_in_range(rerun_cutoff)
+            logger.info(f"Rerun: reset {n_reset} articles (last {rerun_days} days)")
         inserted, skipped = db.upsert_articles(after_keyword)
         logger.info(f"DB: {inserted} inserted, {skipped} skipped (already exists)")
         to_classify = db.get_unprocessed()
@@ -322,6 +327,13 @@ def _run_single_profile(
     default=False,
     help="config/profiles/ 以下の全プロファイルを実行して統合HTMLを出力",
 )
+@click.option(
+    "--rerun-days",
+    "rerun_days",
+    default=None,
+    type=int,
+    help="直近N日分の記事のLLM判断をやり直す（DBの処理済みフラグをリセット）",
+)
 def run_cmd(
     days: int | None,
     output: str | None,
@@ -330,6 +342,7 @@ def run_cmd(
     open_browser: bool,
     profile: str | None,
     all_profiles: bool,
+    rerun_days: int | None,
 ) -> None:
     """HR tech技術記事をRSSから収集し、Markdownにまとめる。"""
     if profile and all_profiles:
@@ -361,7 +374,7 @@ def run_cmd(
             reset_llm_cache()
             pconfig = Config(profile=pname)
             articles, summaries, n_fetched, n_filter, n_classified = (
-                _run_single_profile(pconfig, days, no_db, db_path)
+                _run_single_profile(pconfig, days, no_db, db_path, rerun_days)
             )
             profile_results.append(ProfileResult(pname, articles, summaries))
             _print_summary(
@@ -386,7 +399,7 @@ def run_cmd(
     reset_stats()
     config = Config(profile=profile)
     output_articles, output_summaries, n_fetched, n_filter, n_classified = (
-        _run_single_profile(config, days, no_db, db_path)
+        _run_single_profile(config, days, no_db, db_path, rerun_days)
     )
 
     md = render_markdown(output_articles, summaries=output_summaries, days=days)

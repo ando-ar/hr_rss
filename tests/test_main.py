@@ -20,6 +20,7 @@ def _make_article(title: str = "AI記事", url: str = "https://example.com") -> 
 def test_main_runs_without_error(tmp_path):
     with (
         patch("hr_rss.__main__.fetch_feed", return_value=[]),
+        patch("hr_rss.__main__._validate_env"),
         patch("hr_rss.__main__.Config") as mock_config_cls,
         patch("hr_rss.__main__.OUTPUT_DIR", tmp_path),
     ):
@@ -29,14 +30,17 @@ def test_main_runs_without_error(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        result = runner.invoke(run_cmd, ["--days", "7", "--no-db"])
+        result = runner.invoke(
+            run_cmd, ["--profile", "test", "--days", "7", "--no-db", "--no-open"]
+        )
 
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
 
 
 def test_main_writes_output_to_output_dir(tmp_path):
     with (
         patch("hr_rss.__main__.fetch_feed", return_value=[]),
+        patch("hr_rss.__main__._validate_env"),
         patch("hr_rss.__main__.Config") as mock_config_cls,
         patch("hr_rss.__main__.OUTPUT_DIR", tmp_path),
     ):
@@ -46,7 +50,9 @@ def test_main_writes_output_to_output_dir(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        runner.invoke(run_cmd, ["--days", "7", "--no-db"])
+        runner.invoke(
+            run_cmd, ["--profile", "test", "--days", "7", "--no-db", "--no-open"]
+        )
 
     assert any(tmp_path.iterdir())
 
@@ -54,6 +60,7 @@ def test_main_writes_output_to_output_dir(tmp_path):
 def test_main_writes_both_md_and_html(tmp_path):
     with (
         patch("hr_rss.__main__.fetch_feed", return_value=[]),
+        patch("hr_rss.__main__._validate_env"),
         patch("hr_rss.__main__.Config") as mock_config_cls,
         patch("hr_rss.__main__.OUTPUT_DIR", tmp_path),
     ):
@@ -63,7 +70,9 @@ def test_main_writes_both_md_and_html(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        runner.invoke(run_cmd, ["--days", "7", "--no-db"])
+        runner.invoke(
+            run_cmd, ["--profile", "test", "--days", "7", "--no-db", "--no-open"]
+        )
 
     suffixes = {p.suffix for p in tmp_path.iterdir()}
     assert ".md" in suffixes
@@ -74,6 +83,7 @@ def test_main_explicit_output_path(tmp_path):
     output_path = tmp_path / "report.md"
     with (
         patch("hr_rss.__main__.fetch_feed", return_value=[]),
+        patch("hr_rss.__main__._validate_env"),
         patch("hr_rss.__main__.Config") as mock_config_cls,
         patch("hr_rss.__main__.OUTPUT_DIR", tmp_path),
     ):
@@ -83,7 +93,19 @@ def test_main_explicit_output_path(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        runner.invoke(run_cmd, ["--days", "7", "--no-db", "--output", str(output_path)])
+        runner.invoke(
+            run_cmd,
+            [
+                "--profile",
+                "test",
+                "--days",
+                "7",
+                "--no-db",
+                "--no-open",
+                "--output",
+                str(output_path),
+            ],
+        )
 
     assert output_path.exists()
 
@@ -96,6 +118,7 @@ def test_main_labels_are_set_on_articles(tmp_path):
         patch("hr_rss.__main__.classify_article", return_value=True),
         patch("hr_rss.__main__.summarize_and_label", return_value=("要約", ["生成AI"])),
         patch("hr_rss.__main__.scrape_text", return_value="本文"),
+        patch("hr_rss.__main__._validate_env"),
         patch("hr_rss.__main__.Config") as mock_config_cls,
         patch("hr_rss.__main__.OUTPUT_DIR", tmp_path),
     ):
@@ -105,9 +128,11 @@ def test_main_labels_are_set_on_articles(tmp_path):
         mock_config_cls.return_value = mock_config
 
         runner = CliRunner()
-        result = runner.invoke(run_cmd, ["--days", "7", "--no-db"])
+        result = runner.invoke(
+            run_cmd, ["--profile", "test", "--days", "7", "--no-db", "--no-open"]
+        )
 
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     output_files = {p.suffix: p for p in tmp_path.iterdir()}
     assert ".md" in output_files
     assert "生成AI" in output_files[".md"].read_text()

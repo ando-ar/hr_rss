@@ -1,3 +1,10 @@
+"""report コマンドのテスト。
+
+report コマンドは OUTPUT_DIR 以下の hr_rss_*.db を自動スキャンして HTML を出力する。
+各テストでは monkeypatch で OUTPUT_DIR を tmp_path に向け、
+hr_rss_test.db をそこに配置してコマンドを実行する。
+"""
+
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -25,8 +32,11 @@ def _make_article(
 
 @pytest.fixture
 def populated_db(tmp_path: Path) -> Path:
-    """処理済み記事が入ったDBパスを返す。"""
-    db_path = tmp_path / "test.db"
+    """処理済み記事が入ったDBを hr_rss_test.db として返す。
+
+    ファイル名は _collect_profile_dbs() の glob パターン (hr_rss_*.db) に合わせる。
+    """
+    db_path = tmp_path / "hr_rss_test.db"
     now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
     articles = [
         _make_article(
@@ -47,125 +57,91 @@ def populated_db(tmp_path: Path) -> Path:
     return db_path
 
 
-def test_report_outputs_md_and_html(tmp_path, populated_db):
+def test_report_outputs_html(tmp_path, populated_db, monkeypatch):
+    """report コマンドが HTML を出力すること。"""
+    import hr_rss.__main__ as m
+
+    monkeypatch.setattr(m, "OUTPUT_DIR", tmp_path)
+
     runner = CliRunner()
     result = runner.invoke(
-        report,
-        [
-            "--from",
-            "2026-04-01",
-            "--to",
-            "2026-04-05",
-            "--db",
-            str(populated_db),
-            "--output",
-            str(tmp_path / "report.md"),
-        ],
+        report, ["--from", "2026-04-01", "--to", "2026-04-05", "--no-open"]
     )
     assert result.exit_code == 0, result.output
-    assert (tmp_path / "report.md").exists()
     assert (tmp_path / "report.html").exists()
 
 
-def test_report_filters_by_date_range(tmp_path, populated_db):
+def test_report_filters_by_date_range(tmp_path, populated_db, monkeypatch):
     """指定期間外の古い記事は出力に含まれない。"""
-    output_path = tmp_path / "report.md"
+    import hr_rss.__main__ as m
+
+    monkeypatch.setattr(m, "OUTPUT_DIR", tmp_path)
+
     runner = CliRunner()
-    runner.invoke(
-        report,
-        [
-            "--from",
-            "2026-04-01",
-            "--to",
-            "2026-04-05",
-            "--db",
-            str(populated_db),
-            "--output",
-            str(output_path),
-        ],
-    )
-    content = output_path.read_text(encoding="utf-8")
+    runner.invoke(report, ["--from", "2026-04-01", "--to", "2026-04-05", "--no-open"])
+    content = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "生成AI記事" in content
     assert "MLOps記事" in content
     assert "古い記事" not in content
 
 
-def test_report_includes_labels(tmp_path, populated_db):
-    output_path = tmp_path / "report.md"
+def test_report_includes_labels(tmp_path, populated_db, monkeypatch):
+    """記事ラベルが出力 HTML に含まれること。"""
+    import hr_rss.__main__ as m
+
+    monkeypatch.setattr(m, "OUTPUT_DIR", tmp_path)
+
     runner = CliRunner()
-    runner.invoke(
-        report,
-        [
-            "--from",
-            "2026-04-01",
-            "--to",
-            "2026-04-05",
-            "--db",
-            str(populated_db),
-            "--output",
-            str(output_path),
-        ],
-    )
-    content = output_path.read_text(encoding="utf-8")
+    runner.invoke(report, ["--from", "2026-04-01", "--to", "2026-04-05", "--no-open"])
+    content = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "生成AI" in content
     assert "MLOps" in content
 
 
-def test_report_uses_label_in_header(tmp_path, populated_db):
-    output_path = tmp_path / "report.md"
+def test_report_uses_date_range_label_in_header(tmp_path, populated_db, monkeypatch):
+    """日付範囲ラベルがヘッダーに使われ「過去N日」は表示されないこと。"""
+    import hr_rss.__main__ as m
+
+    monkeypatch.setattr(m, "OUTPUT_DIR", tmp_path)
+
     runner = CliRunner()
-    runner.invoke(
-        report,
-        [
-            "--from",
-            "2026-04-01",
-            "--to",
-            "2026-04-05",
-            "--db",
-            str(populated_db),
-            "--output",
-            str(output_path),
-        ],
-    )
-    content = output_path.read_text(encoding="utf-8")
-    # daysではなく日付範囲ラベルが使われる
+    runner.invoke(report, ["--from", "2026-04-01", "--to", "2026-04-05", "--no-open"])
+    content = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "2026-04-01 〜 2026-04-05" in content
     assert "過去" not in content
 
 
-def test_report_missing_db_exits_with_error(tmp_path):
+def test_report_missing_db_exits_with_error(tmp_path, monkeypatch):
+    """OUTPUT_DIR に hr_rss_*.db が存在しない場合はエラー終了すること。"""
+    import hr_rss.__main__ as m
+
+    monkeypatch.setattr(m, "OUTPUT_DIR", tmp_path)  # empty → no matching DBs
+
     runner = CliRunner()
-    result = runner.invoke(
-        report,
-        [
-            "--from",
-            "2026-04-01",
-            "--db",
-            str(tmp_path / "nonexistent.db"),
-        ],
-    )
+    result = runner.invoke(report, ["--from", "2026-04-01"])
     assert result.exit_code != 0
 
 
-def test_report_default_output_path(tmp_path, populated_db, monkeypatch):
-    """--output 省略時に output/report_FROM_TO.md が生成される。"""
-    monkeypatch.chdir(tmp_path)
-    # OUTPUT_DIR を tmp_path 内に向ける
+def test_report_default_output_path(tmp_path, monkeypatch):
+    """--output 省略時に OUTPUT_DIR/report.html が生成されること。"""
     import hr_rss.__main__ as m
 
-    monkeypatch.setattr(m, "OUTPUT_DIR", tmp_path / "output")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(m, "OUTPUT_DIR", output_dir)
+
+    # DB を OUTPUT_DIR 直下に hr_rss_*.db 形式で配置
+    db_path = output_dir / "hr_rss_test.db"
+    now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
+    with ArticleDB(db_path) as db:
+        db.upsert_articles(
+            [_make_article(url="https://x.com", published=now - timedelta(days=1))]
+        )
+        db.update_processed("https://x.com", summary="要約", labels=[])
 
     runner = CliRunner()
     result = runner.invoke(
-        report,
-        [
-            "--from",
-            "2026-04-01",
-            "--to",
-            "2026-04-05",
-            "--db",
-            str(populated_db),
-        ],
+        report, ["--from", "2026-04-01", "--to", "2026-04-05", "--no-open"]
     )
     assert result.exit_code == 0, result.output
-    assert (tmp_path / "output" / "report_20260401_20260405.md").exists()
+    assert (output_dir / "report.html").exists()

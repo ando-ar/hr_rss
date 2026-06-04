@@ -7,13 +7,19 @@ from hr_rss.config import Config
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+def _write_exclude_kw(path: Path) -> None:
+    """テスト用の最小 exclude_keywords.yaml を書く。"""
+    (path / "exclude_keywords.yaml").write_text("exclude_keywords: []\n")
+
+
 def test_config_loads_feed_urls(tmp_path):
     feeds_yaml = tmp_path / "feeds.yaml"
     feeds_yaml.write_text(
         "feeds:\n  - url: https://example.com/feed\n    name: Example\n"
     )
+    _write_exclude_kw(tmp_path)
 
-    config = Config(feeds_path=feeds_yaml)
+    config = Config(config_dir=tmp_path, feeds_path=feeds_yaml)
 
     assert len(config.feeds) == 1
     assert config.feeds[0]["url"] == "https://example.com/feed"
@@ -27,14 +33,15 @@ def test_config_loads_multiple_feeds(tmp_path):
         "  - url: https://a.com/feed\n    name: A\n"
         "  - url: https://b.com/feed\n    name: B\n"
     )
+    _write_exclude_kw(tmp_path)
 
-    config = Config(feeds_path=feeds_yaml)
+    config = Config(config_dir=tmp_path, feeds_path=feeds_yaml)
 
     assert len(config.feeds) == 2
 
 
 def test_config_has_exclude_keywords():
-    config = Config()
+    config = Config(profile="hr_datascience")
 
     assert len(config.exclude_keywords) > 0
     assert any("資金調達" in kw for kw in config.exclude_keywords)
@@ -50,7 +57,8 @@ def test_config_feeds_is_null_in_yaml(tmp_path):
     """feeds: null の YAML を読んでも AttributeError にならず空リストを返すこと"""
     feeds_yaml = tmp_path / "feeds.yaml"
     feeds_yaml.write_text("feeds: null\n")
-    config = Config(feeds_path=feeds_yaml)
+    _write_exclude_kw(tmp_path)
+    config = Config(config_dir=tmp_path, feeds_path=feeds_yaml)
     assert config.feeds == []
 
 
@@ -58,7 +66,8 @@ def test_config_empty_feeds_list(tmp_path):
     """feeds: [] の YAML を読んだとき空リストを返すこと"""
     feeds_yaml = tmp_path / "feeds.yaml"
     feeds_yaml.write_text("feeds: []\n")
-    config = Config(feeds_path=feeds_yaml)
+    _write_exclude_kw(tmp_path)
+    config = Config(config_dir=tmp_path, feeds_path=feeds_yaml)
     assert config.feeds == []
 
 

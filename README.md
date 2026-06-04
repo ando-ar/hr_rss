@@ -73,6 +73,7 @@ uv run hr-rss run --profile hr_datascience
 | オプション | デフォルト | 説明 |
 |---|---|---|
 | `--days N` | なし（全期間） | 出力を直近N日間に絞る |
+| `--rerun-days N` | なし | 直近N日の記事のLLM判断をやり直す（処理済みフラグをリセット） |
 | `--profile NAME` | なし（全プロファイル実行） | 実行するプロファイル名 |
 | `--all-profiles` | — | 全プロファイルを明示的に実行（デフォルト動作と同じ） |
 | `--output PATH` | `output/output.html` | 出力ファイルのパス |
